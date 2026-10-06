@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "p4-codex-bridge"
+dynamic = ["version"]
+description = "Shared Python API for Codex CLI execution used by P4 components"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+p4-codex = "p4_codex_bridge.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["p4_codex_bridge*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "p4_codex_bridge.__version__"}

@@ -1,0 +1,19 @@
+{
+  "name": "p4-codex-bridge",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Shared Python API and backward-compatible JSON subprocess bridge to an authenticated Codex CLI session for P4 consumers.",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bin/p4-codex-bridge.js",
+    "test:js": "node tests/test_bridge.js",
+    "test:python": "python -m unittest discover -s tests_py -v",
+    "test": "node tests/test_bridge.js && python -m unittest discover -s tests_py -v",
+    "smoke": "node tests/smoke_codex.js",
+    "smoke:streaming": "python tests_real/smoke_streaming.py",
+    "smoke:approval": "python tests_real/smoke_approval_reject.py"
+  }
+}

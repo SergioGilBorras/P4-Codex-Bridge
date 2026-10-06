@@ -1,0 +1,50 @@
+# Dependencies and package-manager output
+node_modules/
+npm-debug.log*
+
+# Python package and test output
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+*.whl
+.coverage
+.pytest_cache/
+
+# Credentials and local environment
+.env
+.env.*
+!.env.example
+.codex/auth.json
+
+# Runtime output and temporary files
+logs/
+temp/
+tmp/
+outputs/
+.test-tmp-*/
+*.tmp
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite
+*.db
+.codex-schema-audit/
+.serena/cache/
+.serena/logs/
+.serena/project.local.yml
+tests_real/.live-watch-state/
+tests_real/smoke_workspace/
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# Operating systems
+.DS_Store
+Thumbs.db
+desktop.ini
