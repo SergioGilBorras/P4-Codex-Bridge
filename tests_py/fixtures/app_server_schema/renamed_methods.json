@@ -1,0 +1,7 @@
+{
+  "definitions": {
+    "ThreadCreateRequest": {"properties": {"method": {"const": "thread/create"}}},
+    "TurnStartRequest": {"properties": {"method": {"const": "turn/start"}}},
+    "FutureRequest": {"properties": {"method": {"const": "future/newMethod"}}}
+  }
+}

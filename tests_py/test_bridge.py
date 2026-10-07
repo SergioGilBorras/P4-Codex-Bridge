@@ -18,6 +18,9 @@ from p4_codex_bridge import (
     SandboxMode,
 )
 from p4_codex_bridge.scheduler import ResourceScheduler, RuntimeLimits
+from p4_codex_bridge.errors import CapabilityUnavailableError
+from p4_codex_bridge.security import ProjectTrust, RunSecurityPolicy
+from p4_codex_bridge.app_server_capabilities import AppServerCapabilitySet, CapabilityStatus, FEATURE_METHODS
 
 
 FAKE_CODEX = r'''import json, os, sys, time
@@ -46,10 +49,10 @@ elif args[:2] == ["app-server", "--listen"]:
             data = [{"model":"fake-model", "id":"fake-model", "isDefault":True}] if not cursor else []
             print(json.dumps({"jsonrpc":"2.0", "id":request["id"], "result":{"data":data,"nextCursor":None}}), flush=True)
         elif request.get("method") == "config/read":
-            result = {"config":{"model":"fake-model", "api_key":"must-not-leak"}, "origins":{"model":{"name":{"type":"project"}}}, "layers":[{"name":{"type":"user"}},{"name":{"type":"project"}}]}
+            result = {"config":{"model":"fake-model", "api_key":"must-not-leak"}, "origins":{"model":{"name":{"type":"project"}}, "projects.C:\\private\\client.trust_level":{"name":{"type":"user"}}}, "layers":[{"name":{"type":"user"}},{"name":{"type":"project"}}]}
             print(json.dumps({"jsonrpc":"2.0", "id":request["id"], "result":result}), flush=True)
         elif request.get("method") == "mcpServerStatus/list":
-            result = {"data":[{"name":"fixture-mcp","runtimeStatus":"connected","authStatus":"unknown","tools":{"search":{}}}]}
+            result = {"data":[{"name":"fixture-mcp","runtimeStatus":"connected","authStatus":"Bearer should-not-leak","tools":{"search":{}}}]}
             print(json.dumps({"jsonrpc":"2.0", "id":request["id"], "result":result}), flush=True)
         elif request.get("method") == "skills/list":
             result = {"data":[{"cwd":request["params"]["cwds"][0],"skills":[{"name":"fixture-skill","description":"fixture","enabled":True,"scope":"user"}]}]}
@@ -115,9 +118,14 @@ class BridgeTests(unittest.TestCase):
         self.codex.write_text(FAKE_CODEX, encoding="utf-8")
         self.cwd = self.root / "workspace"
         self.cwd.mkdir()
-        self.override = patch.dict(os.environ, {"CODEX_BIN": str(self.codex)})
+        self.override = patch.dict(os.environ, {"P4_CODEX_BRIDGE_CODEX_EXECUTABLE": str(self.codex)})
         self.override.start()
-        self.bridge = CodexBridge(state_dir=self.state, allowed_roots=(self.root,), default_timeout_seconds=30)
+        self.bridge = CodexBridge(state_dir=self.state, allowed_roots=(self.root,), default_timeout_seconds=30,
+            app_server_capability_override=AppServerCapabilitySet({key: CapabilityStatus.SUPPORTED for key in FEATURE_METHODS}, "fake-schema", "v2"),
+            default_security_policy=RunSecurityPolicy(project_trust=ProjectTrust.TRUSTED,
+                allow_project_config=True, allow_agents=True, allow_skills=True,
+                allow_external_mcps=True, allow_side_effect_mcps=True,
+                explicit_risk_acknowledgement=True, policy_id="offline-fake"))
 
     def tearDown(self) -> None:
         # The direct compatibility API collects/joins its own results. Only
@@ -503,13 +511,23 @@ class BridgeTests(unittest.TestCase):
         self.assertTrue(capabilities["exec"]["output_schema"])
         self.assertTrue(capabilities["app_server"]["available"])
 
+    def test_advanced_exec_fails_before_spawn_when_installed_capability_is_missing(self):
+        self.codex.write_text(FAKE_CODEX.replace('elif args[:2] == ["exec", "resume"] and "--help" in args:\n    print("Usage: codex exec resume SESSION_ID [PROMPT] --json --output-schema --output-last-message --model -c --ignore-user-config")',
+                                                'elif args[:2] == ["exec", "resume"] and "--help" in args:\n    print("unknown subcommand")'), encoding="utf-8")
+        self.bridge._capability_probe_cache.clear()
+        with self.assertRaises(CapabilityUnavailableError):
+            self.bridge.resume("session-123", "continue", cwd=self.cwd, confirm_inherited_permissions=True)
+
     def test_config_mcp_skills_and_effective_state_are_separate(self):
         config = self.bridge.get_effective_config(cwd=self.cwd)
         self.assertEqual(config["values"]["model"], "fake-model")
         self.assertNotIn("api_key", config["values"])
         self.assertEqual(config["sources"]["model"], "project")
+        self.assertNotIn("projects.C:\\private\\client.trust_level", config["sources"])
         servers = self.bridge.list_configured_mcps(cwd=self.cwd)
         self.assertEqual(servers[0]["tool_count"], 1)
+        self.assertEqual(servers[0]["auth_status"], "unknown")
+        self.assertNotIn("should-not-leak", repr(servers))
         self.assertIsNone(servers[0]["callable"])
         self.assertIsNone(servers[0]["effective_for_run"])
         skills = self.bridge.list_effective_skills(cwd=self.cwd)
@@ -520,8 +538,23 @@ class BridgeTests(unittest.TestCase):
         self.assertIsNone(effective["effective"]["mcp"]["effective_for_run"])
         self.assertEqual(effective["effective"]["cwd"], str(self.cwd.resolve()))
 
+    def test_capability_diagnostics_keep_exec_effectiveness_unknown(self):
+        report = self.bridge.get_effective_capabilities(cwd=self.cwd, include_diagnostics=True)
+        diagnostic = report["diagnostic_child"]["results"]
+        self.assertEqual(diagnostic["mcp"]["status"], "CONFIRMED")
+        self.assertEqual(diagnostic["mcp"]["data"][0]["tool_count"], 1)
+        self.assertEqual(diagnostic["skills"]["data"][0]["name"], "fixture-skill")
+        self.assertIsNone(report["effective"]["mcp"]["effective_for_run"])
+        self.assertIsNone(report["effective"]["skills"]["effective_for_run"])
+
+    def test_isolated_capability_diagnostics_are_not_claimed(self):
+        report = self.bridge.get_effective_capabilities(
+            cwd=self.cwd, config_policy="isolated", include_diagnostics=True,
+        )
+        self.assertEqual(report["diagnostic_child"]["results"]["mcp"]["status"], "NOT_SUPPORTED")
+
     def test_binary_not_found(self):
-        with patch.dict(os.environ, {"CODEX_BIN": str(self.root / "absent.py")}):
+        with patch.dict(os.environ, {"P4_CODEX_BRIDGE_CODEX_EXECUTABLE": str(self.root / "absent.py")}):
             result = self.bridge.run("hello", cwd=self.cwd)
         self.assertFalse(result.ok)
         self.assertIn("not found", result.error["message"].lower())

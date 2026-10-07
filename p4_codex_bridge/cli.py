@@ -2,14 +2,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 import time
 from dataclasses import asdict
 from typing import Any
 
-from .client import CodexBridge
-from .runtime import redact
 from . import __version__
+
+
+class JsonArgumentParser(argparse.ArgumentParser):
+    """Keep usage failures inside the documented JSON stdout contract."""
+
+    def error(self, message: str) -> None:
+        del message  # Avoid reflecting arbitrary argv values into logs/output.
+        error = {"ok": False, "error": {"code": "USAGE_ERROR", "message": "invalid command arguments"}}
+        sys.stdout.write(json.dumps(error, ensure_ascii=False) + "\n")
+        sys.stderr.write("invalid command arguments\n")
+        raise SystemExit(2)
+
+
+def _add_service_paths(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--config")
+    parser.add_argument("--state-dir")
 
 
 def _read_json() -> dict[str, Any]:
@@ -22,10 +38,10 @@ def _read_json() -> dict[str, Any]:
     return data
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="p4-codex")
+def build_parser() -> argparse.ArgumentParser:
+    parser = JsonArgumentParser(prog="p4-codex")
     parser.add_argument("--version", action="version", version=f"p4-codex {__version__}")
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=True, parser_class=JsonArgumentParser)
     run_parser = sub.add_parser("run")
     run_parser.add_argument("--announce", action="store_true")
     start_parser = sub.add_parser("start")
@@ -68,8 +84,182 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("limits")
     cancel_parser = sub.add_parser("cancel")
     cancel_parser.add_argument("run_id")
+    service = sub.add_parser("service")
+    service_sub = service.add_subparsers(dest="service_command", required=True)
+    service_run = service_sub.add_parser("run")
+    _add_service_paths(service_run)
+    service_run.add_argument("--fake", action="store_true", help=argparse.SUPPRESS)
+    for name in ("status", "stop", "restart", "recover", "demo"):
+        command = service_sub.add_parser(name)
+        _add_service_paths(command)
+        command.add_argument("--json", action="store_true")
+        if name in {"stop", "restart", "recover", "demo"}:
+            command.add_argument("--timeout", type=float, default=30)
+    health = sub.add_parser("health")
+    _add_service_paths(health)
+    health.add_argument("--json", action="store_true")
+    metrics = sub.add_parser("metrics")
+    _add_service_paths(metrics)
+    metrics.add_argument("--json", action="store_true")
+    config = sub.add_parser("config")
+    config_sub = config.add_subparsers(dest="config_command", required=True)
+    for name in ("show", "validate"):
+        command = config_sub.add_parser(name)
+        _add_service_paths(command)
+    doctor = sub.add_parser("doctor")
+    _add_service_paths(doctor)
+    doctor.add_argument("--json", action="store_true")
+    maintenance = sub.add_parser("maintenance")
+    maintenance_sub = maintenance.add_subparsers(dest="maintenance_command", required=True)
+    for name in ("status", "clean"):
+        command = maintenance_sub.add_parser(name)
+        _add_service_paths(command)
+        command.add_argument("--dry-run", action="store_true")
+        command.add_argument("--json", action="store_true")
+    submit = sub.add_parser("submit")
+    submit_sub = submit.add_subparsers(dest="submit_command", required=True)
+    submit_exec = submit_sub.add_parser("exec")
+    submit_exec.add_argument("--wait", type=float, default=30)
+    submit_exec.add_argument("--json", action="store_true")
+    _add_service_paths(submit_exec)
+    thread = sub.add_parser("thread")
+    thread_sub = thread.add_subparsers(dest="thread_command", required=True)
+    thread_create = thread_sub.add_parser("create")
+    thread_create.add_argument("--wait", type=float, default=30)
+    thread_create.add_argument("--json", action="store_true")
+    _add_service_paths(thread_create)
+    turn = sub.add_parser("turn")
+    turn_sub = turn.add_subparsers(dest="turn_command", required=True)
+    turn_start = turn_sub.add_parser("start")
+    turn_start.add_argument("--wait", type=float, default=30)
+    turn_start.add_argument("--json", action="store_true")
+    _add_service_paths(turn_start)
+    # The registry is intentionally shared by service and non-service commands.
+    # This flag lets an operator point any CLI view/control command at that same DB.
+    for command_parser in sub.choices.values():
+        if not any("--state-dir" in action.option_strings for action in command_parser._actions):
+            command_parser.add_argument("--state-dir", help=argparse.SUPPRESS)
+    # Every leaf command accepts --json. Machine-readable JSON/JSONL is the
+    # stdout contract, so this flag is explicit for scripts but not required.
+    def add_json_options(command_parser: argparse.ArgumentParser) -> None:
+        if command_parser is not parser and not any("--json" in action.option_strings for action in command_parser._actions):
+            command_parser.add_argument("--json", action="store_true", help="emit machine-readable JSON (the default)")
+        for action in command_parser._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                for child_parser in action.choices.values():
+                    add_json_options(child_parser)
+    add_json_options(parser)
+    return parser
+
+
+def _error_exit_code(exc: Exception) -> int:
+    from .errors import (BackendError, BridgeTimeoutError, CapabilityUnavailableError,
+                         ConflictError, QueueFullError, ResourceUnavailableError,
+                         RunNotFoundError, RunSecurityRejectedError, RunStateError,
+                         ServiceUnavailableError, ConfigurationError)
+    from .events import (ApprovalError, ApprovalTimeoutError, EventDecodeError,
+                         EventStreamError, ToolEventError)
+    if isinstance(exc, RunSecurityRejectedError): return 3
+    if isinstance(exc, CapabilityUnavailableError): return 4
+    if isinstance(exc, (BridgeTimeoutError, ApprovalTimeoutError, TimeoutError)): return 6
+    if isinstance(exc, (ApprovalError, ConflictError)): return 8
+    if isinstance(exc, (EventDecodeError, EventStreamError, ToolEventError)): return 7
+    if isinstance(exc, (ConflictError, QueueFullError, ResourceUnavailableError,
+                        RunNotFoundError, RunStateError)): return 8
+    if isinstance(exc, BackendError): return 7
+    if isinstance(exc, (ServiceUnavailableError, ConnectionError, FileNotFoundError)): return 5
+    if isinstance(exc, (ConfigurationError, ValueError, TypeError)): return 2
+    return 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "state_dir", None):
+        os.environ["P4_CODEX_BRIDGE_STATE_DIR"] = str(args.state_dir)
     try:
+        if args.command in {"service", "health", "metrics", "config", "doctor", "maintenance"}:
+            from .service import (ForegroundService, ServiceConfig, default_state_dir, doctor_report,
+                                  fake_app_server_command, launch_service, request_service_action,
+                                  service_metrics, service_status, validate_config, database_health, maintenance_report)
+            config_path = getattr(args, "config", None) or os.environ.get("P4_CODEX_BRIDGE_CONFIG")
+            state_override = getattr(args, "state_dir", None)
+            if args.command == "config":
+                report = validate_config(config_path, state_dir=state_override)
+                if args.config_command == "show":
+                    output = report["config"]
+                else:
+                    output = report
+                sys.stdout.write(json.dumps(output, ensure_ascii=False) + "\n")
+                return 0
+            cfg = ServiceConfig.load(config_path, state_dir=state_override)
+            if args.command == "maintenance":
+                report = maintenance_report(cfg.state_dir, cfg, dry_run=(args.maintenance_command == "status" or args.dry_run))
+                sys.stdout.write(json.dumps(report, ensure_ascii=False) + "\n")
+                return 0 if report.get("available") else 1
+            if args.command == "service":
+                if args.service_command == "run":
+                    return ForegroundService(cfg, fake_command=fake_app_server_command() if args.fake else None).run()
+                if args.service_command == "status":
+                    data = service_status(cfg.state_dir)
+                    sys.stdout.write(json.dumps(data, ensure_ascii=False) + "\n")
+                    return 0 if data.get("state") in {"HEALTHY", "DEGRADED", "STOPPED"} else 1
+                if args.service_command == "stop":
+                    output = request_service_action(cfg.state_dir, "stop", timeout=args.timeout)
+                elif args.service_command == "recover":
+                    output = request_service_action(cfg.state_dir, "recover", timeout=args.timeout)
+                elif args.service_command == "demo":
+                    output = request_service_action(cfg.state_dir, "demo", timeout=args.timeout)
+                else:
+                    output = launch_service(config_path=config_path, state_dir=state_override, timeout=args.timeout)
+                sys.stdout.write(json.dumps(output, ensure_ascii=False) + "\n")
+                return 0 if output.get("status", "COMPLETED") in {"COMPLETED", "ACCEPTED"} else 1
+            if args.command == "health":
+                data = service_status(cfg.state_dir)
+                data["database"] = database_health(cfg.state_dir, retention_days=cfg.retention_days)
+                db_report = data["database"]
+                if db_report.get("available") and (db_report.get("integrity") != "ok" or db_report.get("migration_status") not in {"CURRENT", "MIGRATION_REQUIRED"}):
+                    data["state"] = "DEGRADED"
+                    data["reason"] = "database integrity or schema status requires attention"
+                sys.stdout.write(json.dumps(data, ensure_ascii=False) + "\n")
+                return 0 if data.get("state") in {"HEALTHY", "DEGRADED"} else 1
+            if args.command == "metrics":
+                data = service_metrics(cfg.state_dir)
+                sys.stdout.write(json.dumps(data, ensure_ascii=False) + "\n")
+                return 0 if data.get("available", True) else 1
+            if args.command == "doctor":
+                from .service import doctor_report
+                output = doctor_report(cfg)
+                sys.stdout.write(json.dumps(output, ensure_ascii=False) + "\n")
+                return 0 if output["ok"] else 1
+        if args.command in {"submit", "thread", "turn"}:
+            from .service_client import (CodexServiceClient, ExecRunSubmission,
+                CreateThreadRequest, StartTurnRequest)
+            from .models import ApprovalPolicy, SandboxMode
+            from .permissions import CodexPermissions
+            from .security import RunSecurityPolicy
+            request = _read_json()
+            client = CodexServiceClient(state_dir=getattr(args, "state_dir", None), config_path=getattr(args, "config", None))
+            idempotency_key = request.pop("idempotency_key", None)
+            security_data = request.pop("security_policy", None)
+            if security_data is not None:
+                request["security_policy"] = RunSecurityPolicy.from_dict(security_data)
+            if args.command == "submit":
+                permissions_data = request.pop("permissions", None)
+                if permissions_data is not None:
+                    permissions_data["sandbox"] = SandboxMode(permissions_data["sandbox"])
+                    permissions_data["approval_policy"] = ApprovalPolicy(permissions_data["approval_policy"])
+                    permissions_data["writable_roots"] = tuple(permissions_data.get("writable_roots", ()))
+                    request["permissions"] = CodexPermissions(**permissions_data)
+                result = client.submit_exec_run(ExecRunSubmission(**request), idempotency_key=idempotency_key, timeout=args.wait)
+            elif args.command == "thread":
+                result = client.create_thread(CreateThreadRequest(**request), idempotency_key=idempotency_key, timeout=args.wait)
+            else:
+                result = client.start_turn(StartTurnRequest(**request), idempotency_key=idempotency_key, timeout=args.wait)
+            output = asdict(result)
+            sys.stdout.write(json.dumps(output, ensure_ascii=False) + "\n")
+            return 0 if result.status in {"COMPLETED", "SUBMITTED", "CLAIMED"} else 1
+        from .client import CodexBridge
         bridge = CodexBridge()
         if args.command in {"run", "start"}:
             request = _read_json()
@@ -92,34 +282,13 @@ def main(argv: list[str] | None = None) -> int:
                 output, code = record.to_dict(), 0
         elif args.command == "ps":
             rows = bridge.discover_runs(active=args.active, task=args.task, agent=args.agent, backend=args.backend, status=args.status)
-            if args.json:
-                output, code = rows, 0
-            else:
-                headers = ("RUN ID", "STATUS", "AGENT", "TASK", "BACKEND", "WORKSPACE", "ACCESS", "QUEUE_POS", "WAIT_REASON", "AGE")
-                table = [headers]
-                for row in rows:
-                    from datetime import datetime, timezone
-                    try: age = time.strftime("%H:%M:%S", time.gmtime(max(0, (datetime.now(timezone.utc) - datetime.fromisoformat(row["started_at"])).total_seconds())))
-                    except (ValueError, TypeError): age = "?"
-                    meta = row.get("agent_metadata", {})
-                    table.append(tuple(str(v or "-") for v in (row.get("bridge_run_id"), row.get("status"), meta.get("agent_name"), meta.get("task_key"), row.get("backend"), row.get("workspace") or row.get("cwd"), row.get("access_mode"), row.get("queue_position"), row.get("waiting_reason"), age)))
-                widths = [max(len(str(row[i])) for row in table) for i in range(len(headers))]
-                for row in table: sys.stdout.write("  ".join(str(value).ljust(widths[i]) for i, value in enumerate(row)).rstrip() + "\n")
-                return 0
+            output, code = rows, 0
         elif args.command == "inspect":
             output, code = bridge.inspect(args.run_id), 0
         elif args.command == "watch":
             for event in bridge.watch(args.run_id, task=args.task, agent=args.agent, follow=args.follow,
                                       no_deltas=args.no_deltas, tools=args.tools, approvals=args.approvals, since=args.since):
-                if args.json:
-                    sys.stdout.write(json.dumps(event, ensure_ascii=False) + "\n")
-                else:
-                    kind = event.get("type")
-                    data = event.get("data", {})
-                    if kind == "AgentMessageCompleted": message = data.get("final_text", "")
-                    elif kind == "AgentMessageDelta": message = data.get("partial_text", data.get("delta", ""))
-                    else: message = json.dumps(data, ensure_ascii=False)
-                    sys.stdout.write(f"[{event.get('timestamp', '')}] {kind}: {message}\n")
+                sys.stdout.write(json.dumps(event, ensure_ascii=False) + "\n")
             return 0
         elif args.command == "status":
             record = bridge.status(args.run_id)
@@ -162,9 +331,16 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(json.dumps(output, ensure_ascii=False) + "\n")
         return code
     except Exception as exc:
-        sys.stderr.write(redact(str(exc)) + "\n")
-        sys.stdout.write(json.dumps({"ok": False, "error": {"code": "BRIDGE_ERROR", "message": redact(str(exc))}}, ensure_ascii=False) + "\n")
-        return 1
+        from .runtime import redact
+        from .errors import BridgeError
+        public_message = redact(str(exc)) if isinstance(exc, BridgeError) else "operation failed; see sanitized diagnostics"
+        sys.stderr.write(public_message + "\n")
+        code = _error_exit_code(exc)
+        error_name = ("VALIDATION_ERROR" if isinstance(exc, (ValueError, TypeError)) else
+                      "SERVICE_UNAVAILABLE" if isinstance(exc, (ConnectionError, FileNotFoundError)) else
+                      type(exc).__name__ if isinstance(exc, BridgeError) else "BRIDGE_ERROR")
+        sys.stdout.write(json.dumps({"ok": False, "error": {"code": error_name, "message": public_message}}, ensure_ascii=False) + "\n")
+        return code
 
 
 if __name__ == "__main__":

@@ -59,6 +59,7 @@ class RunRegistry:
             for name, definition in {
                 "server_id": "TEXT", "session_id": "TEXT", "thread_id": "TEXT", "turn_id": "TEXT",
                 "agent_metadata_json": "TEXT NOT NULL DEFAULT '{}'", "permissions_json": "TEXT", "config_policy": "TEXT",
+                "security_snapshot_json": "TEXT NOT NULL DEFAULT '{}'",
             }.items():
                 if name not in columns:
                     db.execute(f"ALTER TABLE runs ADD COLUMN {name} {definition}")
@@ -85,11 +86,17 @@ class RunRegistry:
                 resolved_at TEXT,
                 payload_json TEXT NOT NULL
             )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS runtime_approvals(
+                approval_id TEXT PRIMARY KEY,server_id TEXT NOT NULL,bridge_run_id TEXT,thread_id TEXT NOT NULL,
+                turn_id TEXT NOT NULL,method TEXT NOT NULL,status TEXT NOT NULL,decision TEXT,created_at TEXT NOT NULL,
+                resolved_at TEXT,payload_json TEXT NOT NULL
+            )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS runtime_servers(instance_id TEXT PRIMARY KEY,pid INTEGER,command_fingerprint TEXT NOT NULL,started_at TEXT NOT NULL,status TEXT NOT NULL,last_error TEXT)""")
 
     def add_turn_event(self, event: Any) -> None:
         """Persist lifecycle events only; message deltas and tool payloads remain transient."""
         event_type = getattr(event, "type", None)
-        if event_type not in {"ThreadStarted", "TurnStarted", "AgentMessageDelta", "AgentMessageCompleted", "ToolStarted", "ToolCompleted", "ApprovalRequested", "ApprovalResolved", "TurnCompleted", "TurnFailed", "TurnInterrupted", "TurnStopped", "ServerError"}:
+        if event_type not in {"ThreadStarted", "ThreadResumed", "ThreadForked", "TurnReconciled", "TurnStarted", "AgentMessageDelta", "AgentMessageCompleted", "ToolStarted", "ToolCompleted", "ApprovalRequested", "ApprovalResolved", "TurnCompleted", "TurnFailed", "TurnInterrupted", "TurnStopped", "ServerError"}:
             return
         payload = json.dumps(redact_structured(event.to_dict()), ensure_ascii=False, separators=(",", ":"))
         if len(payload.encode("utf-8")) > 64 * 1024:
@@ -104,7 +111,7 @@ class RunRegistry:
         clauses = ["sequence > ?"]
         params: list[Any] = [after_sequence]
         if not include_activity:
-            clauses.append("event_type IN ('ThreadStarted','TurnStarted','ApprovalRequested','ApprovalResolved','TurnCompleted','TurnFailed','TurnInterrupted','TurnStopped','ServerError','SUBMITTED','QUEUED','WAITING_FOR_SLOT','RUNNING','RESOURCE_BLOCKED','RESOURCE_ACQUIRED','RESOURCE_RELEASED','CANCELLED','FAILED')")
+            clauses.append("event_type IN ('ThreadStarted','ThreadResumed','ThreadForked','TurnReconciled','TurnStarted','ApprovalRequested','ApprovalResolved','TurnCompleted','TurnFailed','TurnInterrupted','TurnStopped','ServerError','SUBMITTED','QUEUED','WAITING_FOR_SLOT','RUNNING','RESOURCE_BLOCKED','RESOURCE_ACQUIRED','RESOURCE_RELEASED','CANCELLED','FAILED')")
         if thread_id:
             clauses.append("thread_id = ?"); params.append(thread_id)
         if turn_id:
@@ -116,7 +123,7 @@ class RunRegistry:
     def list_turn_states(self) -> list[dict[str, Any]]:
         with self._connect() as db:
             rows = db.execute("""SELECT sequence,thread_id,turn_id,event_type,payload_json FROM turn_events
-                WHERE turn_id IS NOT NULL AND event_type IN ('ThreadStarted','TurnStarted','ApprovalRequested','ApprovalResolved','TurnCompleted','TurnFailed','TurnInterrupted','TurnStopped','ServerError')
+                WHERE turn_id IS NOT NULL AND event_type IN ('ThreadStarted','ThreadResumed','ThreadForked','TurnReconciled','TurnStarted','ApprovalRequested','ApprovalResolved','TurnCompleted','TurnFailed','TurnInterrupted','TurnStopped','ServerError')
                 ORDER BY sequence""").fetchall()
             approvals = db.execute("SELECT turn_id,approval_id,status FROM approvals WHERE status IN ('PENDING','DECISION')").fetchall()
         latest: dict[str, dict[str, Any]] = {}
@@ -145,7 +152,23 @@ class RunRegistry:
     def list_approvals(self, *, pending_only: bool = True) -> list[dict[str, Any]]:
         with self._connect() as db:
             rows = db.execute("SELECT * FROM approvals WHERE status='PENDING' ORDER BY created_at" if pending_only else "SELECT * FROM approvals ORDER BY created_at").fetchall()
-        return [{**dict(row), "payload": json.loads(row["payload_json"])} for row in rows]
+        return [{**json.loads(row["payload_json"]), **dict(row), "payload": json.loads(row["payload_json"])} for row in rows]
+
+    def list_runtime_approvals(self, *, pending_only: bool = True) -> list[dict[str, Any]]:
+        where = "WHERE status='PENDING'" if pending_only else ""
+        with self._connect() as db:
+            rows = db.execute(f"SELECT * FROM runtime_approvals {where} ORDER BY created_at").fetchall()
+        return [{**json.loads(row["payload_json"]), **dict(row), "payload": json.loads(row["payload_json"])} for row in rows]
+
+    def submit_runtime_approval_decision(self, approval_id: str, decision: str) -> None:
+        if decision not in {"accept", "decline"}:
+            raise ValueError("decision must be accept or decline")
+        with self._connect() as db:
+            row = db.execute("""SELECT a.server_id FROM runtime_approvals a JOIN runtime_servers s ON s.instance_id=a.server_id
+                WHERE a.approval_id=? AND a.status='PENDING' AND s.status='HEALTHY'""", (str(approval_id),)).fetchone()
+            if row is None:
+                raise KeyError("pending approval not owned by a live runtime instance")
+            db.execute("UPDATE runtime_approvals SET status='DECISION',decision=? WHERE approval_id=? AND status='PENDING'", (decision, str(approval_id)))
 
     def submit_approval_decision(self, approval_id: str, decision: str) -> None:
         if decision not in {"accept", "decline", "cancel"}:
@@ -164,13 +187,14 @@ class RunRegistry:
 
     def create(self, run_id: str, *, backend: str, cwd: str, model: str | None, profile: str, result_path: str,
                agent_metadata: dict[str, Any] | None = None, permissions: dict[str, Any] | None = None,
-               config_policy: str | None = None) -> None:
+               config_policy: str | None = None, security_snapshot: dict[str, Any] | None = None) -> None:
         metadata = _clean_metadata(agent_metadata or {})
         with self._connect() as db:
             db.execute(
-                "INSERT INTO runs(bridge_run_id,backend,cwd,model,profile,started_at,status,result_path,agent_metadata_json,permissions_json,config_policy) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO runs(bridge_run_id,backend,cwd,model,profile,started_at,status,result_path,agent_metadata_json,permissions_json,config_policy,security_snapshot_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (run_id, backend, cwd, model, profile, utc_now(), RunStatus.STARTING.value, result_path,
-                 json.dumps(metadata, ensure_ascii=False), json.dumps(redact_structured(permissions), ensure_ascii=False) if permissions else None, config_policy),
+                 json.dumps(metadata, ensure_ascii=False), json.dumps(redact_structured(permissions), ensure_ascii=False) if permissions else None, config_policy,
+                 json.dumps(redact_structured(security_snapshot or {}), ensure_ascii=False)),
             )
 
     def update(self, run_id: str, **fields: Any) -> None:
@@ -267,6 +291,17 @@ class RunRegistry:
                        "agent_metadata": metadata, "event_replay_complete": False})
         with self._connect() as db:
             tables = {item[0] for item in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "runtime_threads" in tables and row.get("thread_id"):
+                thread = db.execute("""SELECT t.parent_thread_id,t.server_id,t.status,t.resumable,t.remote_state_verified,t.replay_complete,t.ephemeral,s.status AS server_status
+                    FROM runtime_threads t LEFT JOIN runtime_servers s ON s.instance_id=t.server_id WHERE t.thread_id=?""", (row["thread_id"],)).fetchone()
+                if thread:
+                    result.update({"parent_thread_id": thread["parent_thread_id"], "recovered": thread["server_status"] != "HEALTHY",
+                                   "remote_state_verified": bool(thread["remote_state_verified"]) and thread["server_status"] == "HEALTHY", "resumable": bool(thread["resumable"]),
+                                   "ephemeral": bool(thread["ephemeral"]), "event_replay_complete": bool(thread["replay_complete"])})
+            if "runtime_approvals" in tables and row.get("turn_id"):
+                approval = db.execute("SELECT approval_id,status,server_id FROM runtime_approvals WHERE turn_id=? AND status IN ('PENDING','DECISION') ORDER BY created_at LIMIT 1", (row["turn_id"],)).fetchone()
+                if approval:
+                    result["pending_approval"] = {"approval_id": approval["approval_id"], "status": approval["status"], "server_id": approval["server_id"]}
             if "scheduler_runs" in tables:
                 scheduled = db.execute("SELECT workspace,access_mode,status,waiting_reason,blocked_by_run_id,priority,submitted_at FROM scheduler_runs WHERE bridge_run_id=?", (row.get("bridge_run_id"),)).fetchone()
                 if scheduled:

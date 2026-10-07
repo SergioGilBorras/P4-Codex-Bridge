@@ -61,28 +61,32 @@ python -m p4_codex_bridge events <turn-id> --follow --json
 python -m p4_codex_bridge approvals
 python -m p4_codex_bridge approve <approval-id>
 python -m p4_codex_bridge reject <approval-id>
+python -m p4_codex_bridge service run --config C:\P4\config\p4-codex.toml
+python -m p4_codex_bridge service status --config C:\P4\config\p4-codex.toml
+python -m p4_codex_bridge health --config C:\P4\config\p4-codex.toml
+python -m p4_codex_bridge metrics --json --config C:\P4\config\p4-codex.toml
+python -m p4_codex_bridge service stop --config C:\P4\config\p4-codex.toml
 ```
 
-Commands: `run`, `start`, `ps`, `inspect <id>`, `watch <id>`, `status <id>`, `result <id>`, `stop <id>`, `kill <id>`, `cancel <id>`, `resources`, `limits`, `models`, `events [turn-id]`, `approvals`, `approve <id>`, `reject <id>`, `version`, `--version`, `capabilities`. `run` and `start` receive one JSON object on stdin. stdout is JSON; diagnostics are sanitized on stderr. `events --follow` polls lifecycle events only; it cannot recover message deltas. `cancel` withdraws queued work or asks the owning backend to interrupt active managed work.
+Commands also include `service run|status|stop|restart|recover`, `health`, `metrics`, `config show|validate` and `doctor`. `service run` needs no stdin. Pass the same `--state-dir` (or environment override) from other terminals so their discovery/control commands use the daemon's database. `run` and `start` receive one JSON object on stdin. stdout is JSON for one-shot CLI results; diagnostics are sanitized on stderr. `events --follow` polls lifecycle events only; it cannot recover message deltas. `cancel` withdraws queued work or asks the owning backend to interrupt active managed work. See [CLI](docs/CLI.md), [service](docs/SERVICE.md), [configuration](docs/CONFIGURATION.md), [installation](docs/INSTALLATION.md), and [Windows guidance](docs/WINDOWS_SERVICE.md).
 
 ## State and scope
 
 Phases 1–3 provide one-shot exec, dynamic model discovery, managed process registry, ephemeral app-server streaming, event normalization, explicit approvals, interruption, bounded queues and lifecycle replay. Phase 4 adds exec resume/fork/review, structured output, final-message capture, typed tuning/permissions, config introspection and diagnostic MCP/skills discovery. These diagnostic app-server views do not prove a separate exec child sees the same resources. Child visibility/effectiveness for AGENTS, skills and MCPs remains unconfirmed until the manual checks are run. Process rows include bridge run id, PIDs, backend, cwd, model, profile, timestamps, status, exit code and sanitized last error. Exec registry rows omit prompts. Pending scheduler payloads are persisted in SQLite until claim/cancel (maximum 1 MiB), then deleted. Lifecycle events/approval state are sanitized; message deltas/tool output are transient.
 
-The legacy `node bin/p4-codex-bridge.js` contract remains available during migration. Its tests stay offline. The bridge exposes installed `exec resume/fork/review`; persistent app-server resume/fork are not exposed. No consumer repos were touched.
+Python is the only canonical runtime. The old independent JavaScript implementation and npm workflow were removed: there was no bridge consumer requiring them, and they duplicated subprocess/config/security logic. The legacy JavaScript sources in P4-Planning-Agent were not modified. `CodexBridge.resume/fork/review` are exec operations; persistent app-server thread resume/fork are separate manager operations.
 
 ## Tests
 
 ```powershell
 python -m compileall -q p4_codex_bridge tests_py
 python -m unittest discover -s tests_py -v
-npm test
 python tests_real/smoke_streaming.py
 ```
 
-Phase 4 manual smokes (not run by `npm test`): `python tests_real/smoke_structured_output.py`, `python tests_real/smoke_agents_context.py --policy project` (also accept `isolated` or `explicit`), and `python tests_real/smoke_mcp_visibility.py`. Each execution makes at most one generation turn. MCP visibility only queries the diagnostic app-server inventory.
+Manual smokes are not part of the automated suite: `python tests_real/smoke_structured_output.py`, `python tests_real/smoke_agents_context.py --policy project` (also accepts `isolated` or `explicit`), and `python tests_real/smoke_mcp_visibility.py`. Each generation smoke makes at most one turn. MCP visibility only queries the diagnostic app-server inventory.
 
-Automated tests use fake Codex/app-server executables; they do not call Codex or Jira. Manual real smokes are separate: `python tests_real/smoke_streaming.py` makes one read-only turn; `python tests_real/smoke_approval_reject.py` is manual only and rejects a file-write request in its isolated workspace; the existing Python and JS one-shot smokes remain separate from `npm test`.
+Automated tests use fake Codex/app-server executables; they do not call Codex or Jira. Manual real smokes are separate: `python tests_real/smoke_streaming.py` makes one read-only turn; `python tests_real/smoke_approval_reject.py` is manual only and rejects a file-write request in its isolated workspace. There is no Node/npm test workflow.
 
 ## Documentation
 

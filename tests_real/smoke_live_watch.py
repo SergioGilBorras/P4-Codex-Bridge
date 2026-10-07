@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from p4_codex_bridge import CodexBridge, CodexRuntimeManager, TurnState
+from p4_codex_bridge import CodexBridge
+from p4_codex_bridge.runtime_manager import CodexRuntimeManager, TurnState
 
 
 def _numeric_usage(value):

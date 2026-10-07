@@ -1,0 +1,31 @@
+[service]
+# All paths are resolved before startup. Prefer a private per-user state directory.
+state_dir = "%LOCALAPPDATA%/p4-codex-bridge"
+cwd = "C:/P4/workspace"
+startup_timeout_seconds = 20
+shutdown_timeout_seconds = 30
+shutdown_policy = "WAIT"
+approval_timeout_seconds = 300
+
+[runtime]
+global_max_active = 4
+app_server_max_active = 3
+exec_max_active = 2
+max_active_threads = 16
+max_queue_size = 100
+profile_limits = { analysis = 4, planning = 2, implementation = 1, validation = 2, documentation = 1 }
+
+[logging]
+log_dir = "%LOCALAPPDATA%/p4-codex-bridge/logs"
+max_bytes = 5242880
+backup_count = 4
+format = "human" # or "json"
+
+[codex]
+# Optional native executable; omit to resolve the installed codex CLI.
+# executable = "C:/Program Files/Codex/codex.exe"
+
+[retention]
+days = 30
+max_completed_runs = 1000
+max_events_per_run = 2000

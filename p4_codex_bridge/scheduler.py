@@ -74,6 +74,7 @@ class ResourceScheduler:
     def _init(self) -> None:
         with self._connect() as db:
             db.executescript("""
+            BEGIN IMMEDIATE;
             CREATE TABLE IF NOT EXISTS scheduler_runs(
               bridge_run_id TEXT PRIMARY KEY, turn_id TEXT NOT NULL, thread_id TEXT NOT NULL,
               backend TEXT NOT NULL, profile TEXT NOT NULL, workspace TEXT NOT NULL,
@@ -97,6 +98,7 @@ class ResourceScheduler:
             for name, definition in {"process_pid": "INTEGER", "process_identity": "TEXT", "worker_pid": "INTEGER", "worker_identity": "TEXT", "native_session_id": "TEXT", "cancel_requested": "INTEGER NOT NULL DEFAULT 0"}.items():
                 if name not in columns:
                     db.execute(f"ALTER TABLE scheduler_runs ADD COLUMN {name} {definition}")
+            db.execute("COMMIT")
 
     def get_persisted_limits(self) -> dict[str, Any] | None:
         with self._connect() as db:
@@ -201,6 +203,17 @@ class ResourceScheduler:
             db.execute("DELETE FROM workspace_locks WHERE bridge_run_id=?", (run_id,))
             db.execute("DELETE FROM scheduler_payloads WHERE bridge_run_id=?", (run_id,))
             db.commit()
+
+    def reconcile_lost(self, run_id: str, status: str, *, finished_at: str, error: str | None = None) -> bool:
+        """Correct a conservative LOST marker only after a matching remote terminal state is verified."""
+        if status not in {RunStatus.COMPLETED.value, RunStatus.FAILED.value, RunStatus.INTERRUPTED.value}:
+            raise ValueError("remote reconciliation requires a terminal Codex turn status")
+        with self._lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            cursor = db.execute("UPDATE scheduler_runs SET status=?,finished_at=?,error=? WHERE bridge_run_id=? AND status='LOST' AND error='manager restarted; remote outcome unknown'",
+                                (status, finished_at, error, run_id))
+            db.commit()
+            return cursor.rowcount == 1
 
     def set_status(self, run_id: str, status: str) -> None:
         if status not in {"RUNNING", "WAITING_APPROVAL"}: raise ValueError("invalid active scheduler status")

@@ -31,10 +31,11 @@ Multiple watchers poll the shared SQLite journal independently; closing one does
 Selectors matching zero or multiple active runs fail with candidate IDs instead of choosing one.
 
 Exec streams record `thread.started`, completed assistant messages, and tool item lifecycle
-from Codex JSONL. App-server runs record lifecycle, message deltas and tool events received by
-the manager. SQLite retains bounded, sanitized event payloads. After restart, persisted events
-can be inspected, but message replay is incomplete whenever the backend did not persist deltas;
-the inspection field `event_replay_complete` is therefore false.
+from Codex JSONL. The resident manager journals sanitized lifecycle and approval events;
+message deltas and tool arguments/results remain transient. After restart, lifecycle events
+can be inspected, but there is no remote delta replay; `event_replay_complete` remains false.
+Inspection reports thread `resumable`, parent thread, `recovered`, `remote_state_verified`,
+pending approval ownership and replay completeness when a persistent thread is available.
 
 The Python API is `CodexBridge.list_runs(...)`, `resolve_run_reference(id)`, `inspect(id)`,
 `watch(...)`, and `awatch(...)`. `announce_run=True` sends sanitized announcements through the

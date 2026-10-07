@@ -23,3 +23,14 @@ handlers without their own retention controls.
 
 Health is local process/SQLite/protocol state, not proof that model inference,
 authentication, MCP calls or a particular feature will succeed.
+
+## Resident service views
+
+`p4-codex service status` and `p4-codex health` read the latest sanitized
+foreground-service heartbeat from the shared SQLite state directory.
+`p4-codex metrics [--json]` returns recorded counters; token usage stays null
+unless the manager observes it. The service snapshot includes SQLite database
+size; cleanup counts are returned by each `maintenance clean` response and are
+not retained as a historical metrics series. From another terminal, pass the same
+`--state-dir` or set `P4_CODEX_BRIDGE_STATE_DIR`. These commands do not attach to
+or drive a Codex turn. See [service](SERVICE.md).

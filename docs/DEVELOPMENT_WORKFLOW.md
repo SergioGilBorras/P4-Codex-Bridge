@@ -7,23 +7,22 @@
 1. Check `git status` and relevant instructions; do not read the whole repository.
 2. Check the live tool/skill catalog. Read a specialized skill before implementing its domain.
 3. Use Serena/PyCharm only if their project context points to this checkout; otherwise use `rg`, focused file reads and `apply_patch`.
-4. Edit the smallest Python API or compatibility Node surface that satisfies the change; run a focused test, then broaden only when risk requires it.
+4. Edit the smallest Python API surface that satisfies the change; run a focused test, then broaden only when risk requires it.
 5. Inspect `git diff`; do not include consumer repositories.
 
 ## Codex/API, config or lifecycle change
 
 1. Read the `openai-docs` skill and inspect `codex --version`, the relevant local `--help`, and current official docs/schema. Follow the **OPENAI / CODEX SOURCE OF TRUTH** order: installed CLI/schema (when version-specific) -> OpenAI Developer Docs MCP -> installed official source/docs -> official OpenAI web docs if needed.
 2. Separate CLI support, official SDK support and what Bridge actually implements. Never advertise CLI feature support as a Bridge method until implemented and tested.
-3. Check caller/API references, cwd, child process, configuration and compatibility with the legacy JS contract.
+3. Check caller/API references, cwd, child process and configuration.
 4. Prefer the official Python Codex SDK when installed and operationally suitable. If unavailable, use only protocol methods/fields verified from the installed app-server schema; keep the raw transport narrow, fake-tested and fail-closed. For exec work use Python argument arrays with `shell=False`, prompt on stdin, timeout and bounded output.
-5. Verify offline Python + JS tests, including fake app-server lifecycle/approval paths. Real smoke scripts remain outside the suite; streaming smoke is one read-only turn, approval smoke is manual only.
+5. Verify offline Python tests, including fake app-server lifecycle/approval paths. Real smoke scripts remain outside the suite; streaming smoke is one read-only turn, approval smoke is manual only.
 
 ## Commands
 
 ```powershell
 python -m compileall -q p4_codex_bridge tests_py
 python -m unittest discover -s tests_py -v
-npm test
 python tests_real/smoke_streaming.py
 ```
 

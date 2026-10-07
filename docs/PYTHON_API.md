@@ -2,34 +2,49 @@
 
 ## Public surface and stability
 
-Consumers should import only from `p4_codex_bridge`. The supported consumer
-facade is `CodexBridge`; `RuntimeLimits` and the typed request/result/status,
-permission and public error models are stable contracts. `CodexRuntimeManager`
-and its returned `ManagedThread` / `ManagedTurn` handles are experimental while
-the resident lifecycle and recovery contract is being stabilized.
+Consumers should import contracts only from `p4_codex_bridge`. Its explicit
+package-root allowlist is the stable 1.0 boundary. `CodexBridge` is the
+in-process facade; `CodexServiceClient` is the stable boundary for a separate
+process submitting work to the resident service. Protocol-specific lifecycle
+operations remain experimental where they depend on evolving app-server RPCs.
 
 | Component | Classification | Consumer guidance |
 |---|---|---|
-| `CodexBridge` | STABLE for one-shot exec, managed scheduled `start`, discovery and observation; app-server lifecycle remains EXPERIMENTAL | Preferred consumer entry point. |
-| `CodexRuntimeManager` | EXPERIMENTAL | Use only where app-server threads and turns are explicitly needed. |
-| `RuntimeLimits` | STABLE configuration model | Resource caps; changes do not preempt active work. |
+| `CodexBridge` | STABLE for typed exec operations, managed scheduled `start`, discovery, inspection and cancellation; app-server-specific methods remain experimental | Preferred in-process facade. |
+| `CodexServiceClient` | STABLE for health/status, typed submit/create/start, wait, inspect/watch/cancel and approval operations | Preferred cross-process consumer boundary. |
+| `CodexRuntimeManager` | INTERNAL | Runtime implementation; not a consumer import path. |
+| Runtime limits | EXPERIMENTAL service TOML configuration | SQLite scheduler types are internal and not exported at package root. |
 | scheduler / `ResourceScheduler` | INTERNAL | SQLite queue implementation; do not import it from consumers. |
 | registry / SQLite schema | INTERNAL | Persistence implementation can migrate without consumer changes. |
 | app-server transport and process helpers | INTERNAL | Protocol and OS process details are not public contracts. |
-| Node compatibility bridge | EXPERIMENTAL compatibility surface | Kept for migration; Python is the primary API. |
+| JavaScript runtime | REMOVED | Python is the sole runtime; no in-repository consumer required the duplicate implementation. |
 
-The public package exports only facade types and value/error models. It does
-not export the scheduler, registry, canonicalization helper, transport, or
-process functions. Internal modules may change between minor releases.
+The package root has an explicit export allowlist. Runtime manager, service
+implementation, scheduler, registry, SQLite, transport, canonicalization and
+process helpers are not package-root exports. `tests_py/test_public_api.py`
+locks this boundary. Some exported value types and methods remain experimental;
+being importable does not make them stable.
+
+`CapabilityStatus` is the generic compatibility enum. App-server protocol state
+uses the explicitly named experimental `AppServerCapabilityStatus`; the two
+are separate types. `AppServerCapabilitySet`, `ApprovalRequest`, event models,
+`CodexTurn`, and `AppServerApprovalPolicy` are exported for advanced protocol
+users but remain EXPERIMENTAL. See [the 1.0 contract](CONTRACT_1_0.md) for the
+exact stable and experimental root-export lists.
+
+`CodexVersionInfo`, `CapabilitySet`, `CompatibilityResult`,
+`CompatibilityStatus`, and `assess_compatibility` are stable diagnostic value
+contracts. `ForegroundService`, `ServiceConfig`, `maintenance_report` and
+`database_health` are implementation details in `service.py`, not package-root
+exports. Operate the resident process through the CLI and submit work through
+`CodexServiceClient`.
 
 ### Method-level status
 
-For `CodexBridge`, STABLE methods are `get_version`, `get_capabilities`,
-`list_models`, `get_effective_config`, `list_configured_mcps`,
-`list_effective_skills`, `get_effective_capabilities`, `start`, `run`,
-`resume`, `fork`, `review`, `get_run`, `status`, `list_runs`,
-`resolve_run_reference`, `inspect`, `watch`, `awatch`, `format_run_announcement`,
-`stop`, `kill`, and `read_result`.
+For `CodexBridge`, the intended STABLE methods are `get_version`,
+`get_capabilities`, `start`, `run`, `get_run`, `status`, `list_runs`,
+`resolve_run_reference`, `inspect`, `watch`, `stop`, `kill`, `cancel`, and
+`read_result`.
 
 EXPERIMENTAL methods are `start_turn`, `stream_events`, `astream_events`,
 `stream_all_events`, `astream_all_events`, `get_turn_handle`,
@@ -42,6 +57,12 @@ the persistent shared resource queue. `CodexBridge.run` remains direct one-shot
 execution and does not wait in that queue. `CodexBridge.cancel` is the shared
 cancel entry point; active app-server cancellation is delivered to the owning
 runtime manager through the local SQLite control-request table.
+`run(prompt, *, cwd, profile, model, timeout_seconds, permissions,
+reasoning_effort, reasoning_summary, verbosity, output_schema,
+capture_last_message, include_raw_output, config_policy, config_overrides,
+metadata, announce_run, security_policy)` is closed and rejects unknown
+keywords. Stable APIs are synchronous; `watch` is a synchronous iterator.
+Async `awatch`/event streaming and app-server lifecycle APIs are experimental.
 `CodexBridge.recover_exec_runs()` reconciles owned worker identities and accepts
 only a structurally valid result file matching the bridge run ID. It marks
 unverifiable claimed work `LOST`; it never restarts a Codex turn.
@@ -54,18 +75,15 @@ should not use them as a substitute for a missing facade operation.
 
 ### `CodexBridge` methods
 
-Stable: `get_version`, `get_capabilities`, `list_models`, `run`, `start`,
-`get_run`, `status`, `list_runs`, `resolve_run_reference`, `inspect`, `watch`,
-`awatch`, `stop`, `kill`, `read_result`, `resume`, `fork`, `review`,
-`start_turn`, `stream_events`, `astream_events`, `stream_all_events`,
-`astream_all_events`, `get_events`, `approve`, `reject`,
-`get_effective_config`, `list_configured_mcps`, `list_effective_skills`, and
-`get_effective_capabilities` as individually described below. App-server
-diagnostics and child visibility remain partial or unknown where stated; the
-method being public does not strengthen its evidence.
-
-Experimental: turn subscriptions/multiplexing and direct approval/event
-handling APIs, because they depend on the installed app-server protocol.
+The intended stable `CodexBridge` contract is `get_version`,
+`get_capabilities`, `run`, `start`, `get_run`, `status`, `list_runs`,
+`resolve_run_reference`, `inspect`, `watch`, `stop`, `kill`, `cancel`, and
+`read_result`. Model/config, MCP and skill diagnostics are best-effort
+observations, not a guarantee of child effectiveness. `resume`, `fork`, and
+`resume`, `fork`, and `review` are separately gated exec operations and remain
+EXPERIMENTAL until verified against the supported CLI range. Model/config,
+MCP, skill and capability diagnostics; `format_run_announcement`; `awatch`;
+and app-server stream/approval methods are EXPERIMENTAL.
 
 `start()` is the managed/scheduled `exec` path; `run()` deliberately retains
 the direct one-shot path. App-server turns and scheduled exec runs share the
@@ -76,24 +94,24 @@ backends keep their native lifecycle semantics and are not interchangeable.
 
 ### Lifecycle verbs
 
-`cancel` means withdraw a submitted job before it starts. `interrupt` asks an
-active app-server turn to stop while retaining its thread when supported.
-`stop` requests cooperative termination of a managed exec run. `kill` is the
-identity-checked OS process-tree fallback. These operations are not aliases;
-the current CLI does not provide unified active-run cancellation across both
-backends.
+`cancel` withdraws queued work and requests the owning backend's controlled
+termination for active work. `interrupt` asks an active app-server turn to stop
+while retaining its thread when supported. `stop` requests cooperative
+termination of a managed exec run. `kill` is the identity-checked OS
+process-tree fallback. These operations are not aliases.
 
 ### Errors and resource scheduling boundary
 
 The package defines `BridgeError`, `ConfigurationError`,
-`CapabilityUnavailableError`, `QueueFullError`, `ResourceUnavailableError`,
+`CapabilityUnavailableError`, `ServiceUnavailableError`, `ConflictError`,
+`QueueFullError`, `ResourceUnavailableError`,
 `RunNotFoundError`, `RunStateError`, `BackendError`, `AuthenticationError`,
 `ProtocolError`, and `BridgeTimeoutError`. `QueueFullError` is raised by the
 internal persistent scheduler. Error normalization across all legacy facade
 methods is still PARTIAL; some methods preserve `ValueError`, `KeyError`, or
 backend-specific failures for compatibility.
 
-## Resident runtime (Phase 5)
+## Resident runtime (experimental, Phase 5/6)
 
 `CodexRuntimeManager(cwd=..., database_path=...)` owns one app-server child.
 Call `start()`, `health()`, `create_thread(...)`, `start_turn(thread_id,
@@ -103,7 +121,20 @@ Turn submissions pass through the persistent app-server resource queue and
 return a handle while queued. The default active-turn limit is conservative.
 The manager is experimental; `CodexBridge.start_turn()` remains an ephemeral
 connection path; managed `CodexBridge.start()` exec workers use the shared queue.
-Full cancellation/recovery parity is not provided.
+Persistent thread operations are `resume_thread(thread_id, model=None)`,
+`fork_thread(thread_id, last_turn_id=None, before_turn_id=None, ephemeral=False,
+model=None)`, and `steer_turn(thread_id, turn_id, text)`. Resume reopens the
+thread and starts no turn; `start_turn` on that thread creates a new turn.
+Steer appends input to the specific active turn using the protocol's expected
+turn ID. Fork is a server-side operation, not a local copy.
+
+Manager approvals use `list_pending_approvals()`, `get_approval(id)`,
+`approve(id)`, and `reject(id)`. CLI `approvals`, `approve`, and `reject` use
+the shared registry. A decision is accepted only while the owning server
+instance and original JSON-RPC request are live. Restart makes pending requests
+stale; timeout rejects. `thread/turns/list` reconciliation is bounded to one
+100-turn page and matching terminal IDs; active turns are not adopted. Local
+lifecycle replay is partial and remote delta replay is unavailable.
 
 ## Discovery and watch
 
@@ -116,7 +147,7 @@ independently polls persisted events. See [live observability](LIVE_OBSERVABILIT
 
 ## Install / import
 
-The package has no third-party runtime dependency in Phase 1. Version `0.3.0` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`. Install this repository into the caller's Python environment with `pip install -e .`, or add the repository to that environment's import path. Codex CLI remains an external installed prerequisite. Python >=3.10 is declared.
+The package has no third-party runtime dependency beyond the Python 3.10 TOML compatibility dependency. Release version `1.0.0` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`. Install this repository into the caller's Python environment with `pip install -e .`, or install a built wheel. Codex CLI remains an external installed prerequisite. Python >=3.10 is declared.
 
 ```python
 from p4_codex_bridge import (
@@ -160,7 +191,7 @@ print(result.content)
 | `get_effective_config(cwd, ...)` | Diagnostic `config/read` query with a secret-filtered whitelist and layer/source metadata. |
 | `list_configured_mcps(cwd, ...)` | Diagnostic app-server inventory. Advertised tool names are not proof that tool invocation is callable. |
 | `list_effective_skills(cwd, ...)` | Diagnostic cwd-scoped `skills/list`; does not prove that a separate exec run used a skill. |
-| `get_effective_capabilities(...)` | Combines local capability checks and explicit child/run unknown states. |
+| `get_effective_capabilities(..., include_diagnostics=False)` | Returns machine-readable local capability state. With `include_diagnostics=True` and a cwd, adds config/MCP/skills results from a short-lived app-server child. It deliberately leaves host-session visibility and effective state for a separate `exec` run unknown. |
 
 `resume()` and `fork()` require a specific stored session id and `confirm_inherited_permissions=True`: local CLI help exposes no replacement sandbox/approval flags for these commands, so stored session policy remains in force. The supplied `cwd` is validated and used as the subprocess launch cwd, but local help has no `-C` switch for resume/fork; it does not prove the stored session working root changed.
 
@@ -195,7 +226,7 @@ When `ApprovalPolicy.ON_REQUEST` is selected, approval handling is manual by def
 
 Use the default bounded queue (256) unless the consumer has a measured need to change it. Noncritical overflow is counted/dropped; critical events block the protocol reader. Read lifecycle replay after disconnect; message deltas are transient and are not replayed.
 
-Not yet exposed: persistent app-server `thread/resume`, `thread/fork`, `send`/`steer`, session lookup, a shared resident manager, tool `requestUserInput`, MCP elicitation handling, and full replay of deltas. Exec resume/fork/review are separate subprocess operations and do not create app-server session handles.
+Still not exposed: tool `requestUserInput`, MCP elicitation handling, automatic reconnect, active-turn adoption, and full remote delta replay. Persistent manager `resume_thread`, `fork_thread`, and `steer_turn` are experimental app-server APIs. Exec resume/fork/review are separate subprocess operations and do not create app-server session handles.
 
 ## Typed controls
 
@@ -226,8 +257,34 @@ Typed tuning is `model`, `reasoning_effort`, `reasoning_summary` (`auto`, `conci
 - `explicit`: normal layered settings plus simple scalar/list TOML-compatible values passed with `-c`.
 - `user`: rejected because installed Codex does not separately select user-only configuration.
 
-`get_effective_config()` uses app-server `config/read`, not the same child process as `exec`; it returns only selected non-secret primitive fields and layer source types. Its result is diagnostic and must not be reported as an exact effective config for another run. For MCPs, `list_configured_mcps()` reports configured/enabled/advertised-tool state separately from callability, child visibility and per-run effectiveness. `list_effective_skills()` has the same diagnostic-child boundary. AGENTS loading is not currently acknowledged by `codex exec`; use the manual marker smoke to confirm a specific cwd/policy combination.
+`get_effective_config()` uses app-server `config/read`, not the same child process as `exec`; it returns only selected non-secret primitive fields and layer source types. Its result is diagnostic and must not be reported as an exact effective config for another run. For MCPs, `list_configured_mcps()` reports configured/enabled/advertised-tool state separately from callability, child visibility and per-run effectiveness. `list_effective_skills()` has the same diagnostic-child boundary. `get_effective_capabilities(include_diagnostics=True)` groups those three diagnostic responses, but never upgrades them to `EFFECTIVE_FOR_RUN`. `config_policy="isolated"` is not supported by the diagnostic app-server because it has no equivalent to exec's `--ignore-user-config`; the API returns `NOT_SUPPORTED` for those diagnostic fields instead of guessing. AGENTS loading is not acknowledged by `codex exec`; the marker script requires an explicit `--allow-unfiltered-mcps` acknowledgement before it can start a model run.
+
+## Foreground service
+
+`CodexServiceClient` is the intended public boundary for a running daemon. It
+provides typed `submit_exec_run`, `create_thread`, `start_turn`,
+`wait_command`, `inspect`, `watch`/`awatch`, and `cancel`; it does not expose
+SQLite. The current client does not provide health/status, approval resolution,
+or thread/turn wait convenience methods; use CLI for those operations. Service
+manager, config loader and database functions remain internal.
 
 ## App-server transport
 
-The official Python package `openai-codex` is available but is not installed as a dependency here. Phase 3 implements the narrow streaming/approval surface over the installed stdio JSON-RPC protocol; the reader is centralized per live turn and is not a resident multi-thread manager. See [events](EVENTS.md), [approvals](APPROVALS.md), [capability matrix](CAPABILITY_MATRIX.md), [architecture](ARCHITECTURE.md), and [lifecycle](LIFECYCLE.md).
+The official Python package `openai-codex` is not a runtime dependency here.
+App-server protocol handling remains experimental and is gated by discovered
+installed-schema capabilities. See [events](EVENTS.md), [approvals](APPROVALS.md),
+[capability matrix](CAPABILITY_MATRIX.md), [architecture](ARCHITECTURE.md), and
+[lifecycle](LIFECYCLE.md).
+# Cross-process service client
+
+Use `CodexServiceClient` when the resident service owns scheduling and app-server
+lifecycle. Its typed public request models are `ExecRunSubmission`,
+`CreateThreadRequest`, and `StartTurnRequest`; `CommandResult` reports command
+status/result/error. Methods are `submit_exec_run`, `create_thread`,
+`start_turn`, and `wait_command`. Requests require the service to be active and
+do not spawn it. Optional idempotency keys prevent duplicate command rows.
+
+The client also exposes `inspect(run_id)`, `cancel(run_id)`, and read-only
+`watch(run_id)`/`awatch(run_id)` helpers over the shared journal. These typed
+request/result classes are part of the frozen consumer boundary. Do not import
+service database/scheduler internals from consumers.

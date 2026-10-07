@@ -14,6 +14,22 @@ class CapabilityUnavailableError(BridgeError):
     pass
 
 
+class ServiceUnavailableError(BridgeError):
+    """The resident service is not available to accept the operation."""
+
+
+class ConflictError(BridgeError):
+    """The requested operation conflicts with current or uncertain run state."""
+
+
+class RunSecurityRejectedError(BridgeError):
+    """The requested run violates the explicit trust/risk policy."""
+
+
+class CapabilityIsolationUnavailableError(RunSecurityRejectedError):
+    """The requested per-run isolation is not provided by the installed Codex surface."""
+
+
 class QueueFullError(BridgeError, RuntimeError):
     pass
 

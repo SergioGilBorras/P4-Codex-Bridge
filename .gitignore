@@ -1,7 +1,3 @@
-# Dependencies and package-manager output
-node_modules/
-npm-debug.log*
-
 # Python package and test output
 __pycache__/
 *.py[cod]

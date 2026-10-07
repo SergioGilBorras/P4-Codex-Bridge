@@ -45,16 +45,21 @@ Approval requests are held pending. Manual `approve`/`reject` decisions can be s
 
 Closing a subscription does not stop the turn; closing the `CodexTurn` or its one-shot `stream_events()` context closes the owned app-server process. A same-process caller may subscribe to an existing live handle. A separate process can read persisted lifecycle events with `p4-codex events <turn>`, but cannot attach to an in-memory stream or recover deltas. `events --follow` polls the lifecycle table; it is not upstream event replay. Critical queue events are never silently dropped: reader backpressure blocks; noncritical overflow is counted per subscriber.
 
-The Bridge does not claim durable session recovery. The Codex thread is created ephemeral for this phase, and no resume identifier is promised after close or consumer/bridge restart. An approval decision is only actionable while the owning app-server connection remains live.
+Standalone `CodexBridge.start_turn()` remains an ephemeral one-turn connection. In contrast, `CodexRuntimeManager.create_thread()` creates a persistent thread (`ephemeral: false`) and records it in the shared registry. `resume_thread(thread_id)` sends the installed `thread/resume` RPC and verifies the returned thread ID. It reopens conversation context; it does not resume or restart an interrupted turn. `start_turn(thread_id, prompt)` submits a new turn to that resumed thread.
 
-## Phase 5 plan
+`fork_thread(thread_id, last_turn_id=... | before_turn_id=...)` uses the real `thread/fork` RPC and records the parent relation. The two cutoff options are mutually exclusive. `steer_turn(thread_id, turn_id, text)` uses `turn/steer` with the required `expectedTurnId`; it is valid only for a currently RUNNING turn and is not an alias for starting a new turn.
+
+The runtime manager receives approval server requests on its central JSON-RPC reader. `list_pending_approvals()`, `get_approval(id)`, `approve(id)` and `reject(id)` share persisted state with `p4-codex approvals/approve/reject`. Only the manager instance that owns the live request can answer it. Manual handling is default; approval timeout sends a controlled decline. On manager restart, outstanding approvals become `STALE_LOCAL` and are never resolved automatically.
+
+After restart, thread metadata is loaded locally but is marked unverified. A caller must explicitly call `resume_thread`; then the manager asks `thread/turns/list` for one bounded page (up to 100) and reconciles matching terminal turn IDs. A matching `inProgress` turn is reported but not re-adopted. No turn is re-executed. See [recovery](RECOVERY.md) for evidence boundaries.
+
+## Persistent thread lifecycle (Phase 6)
 
 - Evaluate official `openai-codex` SDK versus the current narrow JSON-RPC transport for lifecycle stability and deployment version pinning.
-- Expose persistent thread start/resume/fork, send/steer, session lookup, and multi-turn state.
-- Add a resident manager only if concurrency justifies it. Namespace ownership and stop only app-server processes started by the Bridge.
-- Design recovery for bridge/consumer/app-server crash before claiming resume. Persist minimal thread IDs, process identity and lifecycle state; do not duplicate Orchestrator task ownership.
-- Add recovery/reconnection, a resident multi-session manager, health/observability and version compatibility gates.
-- Revisit exec/app-server capability parity as local schemas evolve.
+- The runtime manager can restart its owned transport through `restart()`; this is transport restart, not automatic turn resume.
+- `thread/turns/list` reconciles only matching terminal outcomes. Active remote turns remain unadopted/unknown; bounded history and missing IDs remain unverified.
+- Lifecycle and approval events are persisted to the shared journal. Manager message deltas and tool payloads are not persisted; local lifecycle replay is partial, remote delta replay is not provided.
+- `turn/steer` is implemented against the installed experimental protocol; it is distinct from a new turn and requires the active expected turn ID.
 
 ## Recovery limits
 

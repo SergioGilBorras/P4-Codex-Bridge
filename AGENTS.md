@@ -7,15 +7,16 @@ This repository is shared infrastructure for invoking Codex from P4. Planned con
 ## Tooling and discovery
 
 - Before complex work, inspect live tools/MCP and skills. **Tool discovery is part of the task: before solving a complex problem manually, check whether Serena, PyCharm, a skill or an MCP offers a reliable specialized operation.** Read relevant skill instructions before implementing manually.
-- Use the cheapest reliable source of truth. Prefer Serena/PyCharm structured symbol and inspection results when they target this checkout. Use shell for reproducible Codex CLI, Python, Node, tests and Git operations.
+- Use the cheapest reliable source of truth. Prefer Serena/PyCharm structured symbol and inspection results when they target this checkout. Use shell for reproducible Codex CLI, Python, tests and Git operations.
 - Keep `docs/TOOLS_CATALOG.md` and `docs/SKILLS_CATALOG.md` as environment snapshots; availability changes by session. `docs/ARCHITECTURE.md` records the audited Codex CLI/SDK surface for the installed reference version.
 - **OPENAI / CODEX SOURCE OF TRUTH:** for Codex CLI/exec/app-server, official SDKs, MCP, configuration, models, approvals, sandbox and protocol schemas, use this order: (1) installed CLI/schema when the installed version matters, (2) OpenAI Developer Docs MCP, (3) installed official source/docs, (4) official OpenAI web docs if needed. Never invent flags, fields, methods or capabilities. If official docs differ from the installed version, record the difference, follow the locally verified behavior and do not mark a capability IMPLEMENTED until verified locally. The Developer Docs MCP is a Codex development tool, not a P4-Codex-Bridge runtime dependency.
 - Track MCP `SESSION_VISIBLE`, `CONFIGURED`, `ENABLED`, `CALLABLE`, `CHILD_VISIBLE` and `EFFECTIVE_FOR_RUN` separately; use unknown when evidence is missing. Profiles must deny external/destructive integrations by default and allow them only through verified, explicit policy.
 
 ## Implementation strategy
 
-- Python is the public API for new consumers. Keep Node/JS only as a backward-compatible contract during migration; do not add new Python API behavior only to JS.
-- `codex exec` remains the Phase 1 one-shot backend. Phase 3 uses a narrow installed app-server JSON-RPC surface for ephemeral turns, events and approvals. Evaluate the official `openai-codex` SDK before expanding lifecycle protocol in Phase 4.
+- Python is the sole canonical runtime and public API. Do not reintroduce a duplicate JavaScript Codex client or runtime.
+- Python is the only in-repository runtime; the JS implementation was removed under ADR-002. The CLI and `CodexServiceClient` are the process boundaries; do not add a second protocol client in another language.
+- `codex exec` supports direct one-shot `run()` and managed/scheduled `start()`. The app-server runtime manager is resident and experimental; thread/turn state is distinct from exec runs. Schema preflight must fail closed for unknown required capabilities.
 - No consumer integration until separately requested. Do not remove `P4-Planning-Agent/scripts/js` sources as part of bridge work.
 - Profiles are configuration, not P4 business logic. Only `analysis` is implemented for one-shot `exec`; app-server turns accept explicit permissions. Planned profiles must fail closed rather than silently run with guessed policy.
 - App-server approval handling is manual by default. Never auto-approve by default. `danger-full-access` plus automatic approval must never become a profile default; `AUTO_APPROVE_SAFE_ONLY` stays planned until action classification is deterministic.
@@ -34,8 +35,7 @@ This repository is shared infrastructure for invoking Codex from P4. Planned con
 ## Tests and validation
 
 - Python: `python -m compileall -q p4_codex_bridge tests_py`, then `python -m unittest discover -s tests_py -v`.
-- Legacy Node: `node tests/test_bridge.js`; combined offline suite: `npm test`.
-- Real Codex smokes remain manual and separate: `python tests_real/smoke_streaming.py` is one minimal read-only turn; `python tests_real/smoke_approval_reject.py` is never run automatically. Legacy `node tests/smoke_codex.js` is separate too.
+- Real Codex smokes remain manual and separate: `python tests_real/smoke_streaming.py` is one minimal read-only turn; `python tests_real/smoke_approval_reject.py` is never run automatically.
 - Do not claim checks passed unless they ran. Do not use an unrelated global Python project environment; `.venv` is not currently part of this checkout.
 
 ## Git

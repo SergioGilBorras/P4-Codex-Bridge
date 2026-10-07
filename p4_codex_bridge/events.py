@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterator
 
 from .runtime import redact
+from .errors import BridgeError, BridgeTimeoutError
 
 
 CRITICAL_EVENT_TYPES = {"ApprovalRequested", "ApprovalResolved", "TurnCompleted", "TurnFailed", "TurnInterrupted", "TurnStopped", "ServerError"}
@@ -68,19 +69,19 @@ class CodexEvent:
         return asdict(self)
 
 
-class EventDecodeError(ValueError):
+class EventDecodeError(BridgeError, ValueError):
     """Malformed app-server protocol message."""
 
 
-class EventStreamError(RuntimeError):
+class EventStreamError(BridgeError):
     """app-server event transport failed."""
 
 
-class ApprovalError(RuntimeError):
+class ApprovalError(BridgeError):
     """Approval could not be resolved."""
 
 
-class ApprovalTimeoutError(TimeoutError):
+class ApprovalTimeoutError(BridgeTimeoutError):
     """An approval remained pending past its configured timeout."""
 
 
@@ -88,7 +89,7 @@ class ApprovalRejectedError(ApprovalError):
     """The approval was explicitly rejected."""
 
 
-class ToolEventError(RuntimeError):
+class ToolEventError(BridgeError):
     """Malformed or failed tool activity event."""
 
 

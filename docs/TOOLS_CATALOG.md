@@ -1,25 +1,28 @@
 # Catálogo operativo de tools y MCPs
 
-Inventario actualizado el **6 de octubre de 2026**. Los estados de visibilidad y ejecución se documentan por separado: que un MCP esté en el catálogo de la sesión no demuestra que esté configurado para Codex CLI ni que un proceso hijo lo herede o lo use.
+Inventario **HOST_SESSION_SNAPSHOT**, observado el **6 de octubre de 2026**. Los conteos cambian entre turnos y superficies; no son constantes del producto. Que una tool aparezca en la sesión host no demuestra que un proceso Codex hijo la herede o la use.
 
 ### Inventario de la sesión de desarrollo
 
-| MCP namespace | Conteo informado para esta sesión | Conteo de definiciones accesibles en este turno | Sesión visible | Configurado | Habilitado | Callable | Auth | Visible en proceso hijo | Efectivo para un run del bridge |
-|---|---:|---:|---|---|---|---|---|---|
-| `codex_apps` | 89 | 73 | Sí | Desconocido (host de Codex Apps) | Sí, herramientas expuestas | Sí, 73 interfaces expuestas aquí; no se probaron individualmente las 89 informadas | Desconocido por namespace | No confirmado | No confirmado |
-| `codex_tui` | 9 | 9 | Sí | Desconocido (host de Codex TUI) | Sí, herramientas expuestas | Sí, interfaces expuestas | Desconocido por namespace | No confirmado | No confirmado |
-| `openaideveloperdocs` | 5 | 0 | Informado como sí; no visible en el catálogo de herramientas de este turno | Sí, entrada global verificada con `codex mcp list` | Sí, aparece `enabled` | No confirmado; no se pudo ejecutar `search_openai_docs` desde este turno | `Unknown` en `codex mcp list` | No confirmado | No confirmado |
-| `pycharm` | 37 | 37 | Sí | Sí, entrada global observada | Sí, herramientas expuestas | Sí, interfaces expuestas | `Unsupported` en `codex mcp list` | No confirmado | No confirmado; IDE apunta a otro proyecto |
-| `serena` | 23 | 23 | Sí | Sí, entrada global observada | Sí, herramientas expuestas | Sí, interfaces expuestas | `Unsupported` en `codex mcp list` | No confirmado | No confirmado |
+| MCP namespace | Tools visibles en host | Auth status | Recursos MCP | Skills host / child diagnóstico | CONFIGURED / ENABLED en CLI | CHILD_VISIBLE en child diagnóstico | CALLABLE | EFFECTIVE_FOR_RUN de exec |
+|---|---:|---|---|---|---|---|---|---|
+| codex_apps | 73 | Desconocido | Desconocidos | No asignadas por namespace | No aparece en codex mcp list; visible en app-server, enabled desconocido | Sí: 89 tools anunciadas por app-server diagnóstico | Host schemas expuestos; no probadas. Child no invocado | No confirmado |
+| codex_tui | 9 | Desconocido | Desconocidos | No asignadas por namespace | No aparece en codex mcp list | No observado en diagnóstico app-server ni CLI | Host schema expuesto; no se probó | No confirmado; tooling TUI del host |
+| openaideveloperdocs | 5 | Unknown en CLI | Desconocidos | No asignadas por namespace | Sí / enabled | Sí, diagnóstico app-server: 5 tools anunciadas | Sí: búsqueda inocua de documentación respondió | No confirmado para ejecución exec |
+| pycharm | 37 | Unsupported en CLI | Desconocidos | No asignadas por namespace | Sí / enabled | Entrada configurada visible; handshake falló, 0 tools anunciadas | Host schema expuesto; no se probó | No confirmado |
+| serena | 23 | Unsupported en CLI | Desconocidos | No asignadas por namespace | Sí / enabled | Entrada configurada visible; handshake falló, 0 tools anunciadas | Host schema expuesto; no se probó | No confirmado |
 
-Los conteos informados por la sesión y los que el runtime expone directamente en este turno difieren para `codex_apps` (89 frente a 73) y `openaideveloperdocs` (5 frente a 0). Se conserva la discrepancia para no declarar tools callable sin definición ejecutable. `CALLABLE` significa que este turno ofrece una interfaz invocable; no garantiza autorización, autenticación del servicio, éxito de una invocación concreta ni acceso en un proceso hijo.
+La CLI instalada fue `codex-cli 0.160.1`; `codex login status` confirmó login ChatGPT. `codex mcp list` mostró Serena, PyCharm y OpenAI Developer Docs habilitados. El app-server diagnóstico del workspace fixture anunció `codex_apps` (89) y OpenAI Docs (5); Serena y PyCharm fallaron handshake tras 30 s y no anunciaron tools. `skills/list` anunció cinco skills `system` habilitadas. Esta evidencia corresponde al child app-server diagnóstico, no a `codex exec`.
+
+El inventario host informó 18 skills disponibles. Ese conteo no pertenece a un MCP individual. No se obtuvo un conteo de recursos MCP: la enumeración genérica de recursos no terminó dentro del límite de espera. Solo OpenAI Docs tuvo una llamada inocua exitosa en el host. No se invocaron tools de Apps, Serena, PyCharm ni TUI.
 
 ### Significado de estados
 
 - **SESSION_VISIBLE:** el host presentó el MCP o sus herramientas al agente de esta sesión.
 - **CONFIGURED:** existe una entrada de configuración para ese MCP en el ámbito indicado (global, proyecto o host); registrar una entrada no prueba conectividad.
 - **ENABLED:** la configuración/host no lo marca deshabilitado; no prueba que sus operaciones funcionen.
-- **CALLABLE:** la sesión actual expone al agente un schema/herramienta invocable. Para afirmar disponibilidad real, comprobar una operación inocua.
+- **ADVERTISED:** una sesión/child expone el schema o nombre de la tool. Esto no basta para marcar CALLABLE.
+- **CALLABLE:** una invocación inocua a esa tool tuvo éxito en la misma superficie. La búsqueda Docs MCP confirma solo el host actual.
 - **CHILD_VISIBLE:** un proceso Codex CLI/app-server hijo enumera ese MCP/herramienta durante su ejecución.
 - **EFFECTIVE_FOR_RUN:** evidencia de que el run seleccionado cargó o usó el MCP. No inferirlo a partir de los estados anteriores.
 - Usar `unknown`/«no confirmado» cuando no haya evidencia; nunca colapsar estos campos en un booleano `available`.
@@ -108,11 +111,11 @@ Los prefijos/capacidades anteriores se dedujeron de las descripciones de tool ex
 
 ## Shell, filesystem y Git
 
-No hay un MCP independiente para filesystem/shell/Git. Esta sesión proporciona shell interno (`exec_command`, `write_stdin`), lectura/escritura dentro del workspace y `apply_patch`; Git se ejecuta por shell y también aparece como `mcp__pycharm__git_status` si el IDE apunta al proyecto correcto. Usa `rg` para localizar texto/archivos, PowerShell para operaciones de Windows, Node/npm para este proyecto. No cambies ACLs ni configuración global Git para sortear el sandbox.
+No hay un MCP independiente para filesystem/shell/Git. Esta sesión proporciona shell interno (`exec_command`, `write_stdin`), lectura/escritura dentro del workspace y `apply_patch`; Git se ejecuta por shell y también aparece como `mcp__pycharm__git_status` si el IDE apunta al proyecto correcto. Usa `rg` para localizar texto/archivos y PowerShell para operaciones de Windows. El runtime de este proyecto es Python; no requiere Node/npm. No cambies ACLs ni configuración global Git para sortear el sandbox.
 
 ## OpenAI Developer Docs MCP
 
-**ID:** `openaideveloperdocs` · **Proveedor:** OpenAI · **Categoría:** documentación oficial. `codex mcp list` verificó el servidor global habilitado en `https://developers.openai.com/mcp`; el estado de autenticación aparece como `Unknown`. El inventario informado para esta sesión incluye cinco tools: `search_openai_docs`, `fetch_openai_doc`, `list_openai_docs`, `list_api_endpoints` y `get_openapi_spec`. Este turno no presenta definiciones invocables para ellas (conteo directo 0), así que una consulta inocua al MCP no pudo realizarse y `CALLABLE` sigue sin confirmarse. La búsqueda web oficial sí encontró la [página de Docs MCP](https://developers.openai.com/learn/docs-mcp), pero no sustituye una llamada al servidor.
+**ID:** `openaideveloperdocs` · **Proveedor:** OpenAI · **Categoría:** documentación oficial. `codex mcp list` lo muestra `enabled` en `https://developers.openai.com/mcp`, con auth `Unknown`. En esta sesión se expusieron cinco tools: `search_openai_docs`, `fetch_openai_doc`, `list_openai_docs`, `list_api_endpoints` y `get_openapi_spec`; una búsqueda inocua sobre Codex CLI respondió, por lo que CALLABLE queda confirmado para esta sesión host. Un child app-server diagnóstico también anunció cinco tools, pero no se invocó desde un run del bridge. El MCP sirve para desarrollo/verificación; no es dependencia runtime.
 
 Usarlo para consultar documentación oficial de Codex/OpenAI cuando sea callable. Para comportamiento dependiente de versión, comprobar primero la CLI y el schema instalados. Este MCP es una herramienta de desarrollo/verificación de Codex; no es una dependencia runtime del bridge.
 
@@ -129,21 +132,23 @@ La política deseada es una allowlist explícita por perfil que pueda expresar n
 | `implementation` | Herramientas del workspace solo según configuración explícita; integraciones externas denegadas por defecto |
 | `validation` | Mínimo de herramientas requerido para el verificador explícito |
 
-Esta política está **PLANNED** para el bridge hasta que exista enforcement comprobado en una ejecución local. `codex_apps` de la sesión conversacional no se transfiere automáticamente al proceso hijo.
+La política es **PARTIAL**: el CLI instalado no expone un allowlist de MCP/tool por run, y el diagnóstico app-server de este entorno anunció herramientas externas con write/deploy/delete. El bridge no debe considerar esos tools autorizados por perfil ni afirmar enforcement por run; hace falta un gate explícito o una configuración aislada verificable antes de invocar modelos. La sesión host y el child app-server son superficies distintas.
 
 ### Codex TUI MCP: límite de arquitectura
 
 Las nueve tools informadas son `create_thread`, `fork_thread`, `list_archived_threads`, `list_threads`, `read_thread`, `send_message_to_thread`, `set_thread_archived`, `set_thread_title` y `wait_threads`. Son operaciones del host/TUI de esta sesión; no son métodos del protocolo app-server. No hay evidencia de que un proceso Codex CLI hijo pueda verlas. El lifecycle runtime del bridge debe continuar usando las APIs oficiales CLI/app-server y no depender obligatoriamente del TUI MCP.
 
-### API de inventario efectivo MCP — PLANNED
+### Discovery MCP/skills — IMPLEMENTED como diagnóstico
 
-Se propone `get_mcp_inventory()`, `get_effective_mcps(run_id=...)` y `get_mcp_capability(name, run_id=...)`. La respuesta deberá contener `session_visible`, `configured`, `enabled`, `callable`, `child_visible`, `effective_for_run`, `auth_status` y `tool_count`, cada estado tri-valuado (`true`, `false`, `unknown`) y con evidencia/origen. No devolver tokens, variables secretas ni contenido de credenciales. Ninguno de estos métodos está implementado actualmente en la API Python del bridge.
+`list_configured_mcps(cwd, config_policy)` y `list_effective_skills(cwd, config_policy)` usan `mcpServerStatus/list` y `skills/list` en un child app-server diagnóstico. `get_effective_capabilities()` conserva como unknown la visibilidad de sesión host y la efectividad en un run `exec`. Los descriptores anunciados no se invocan; una lista de tools no prueba CALLABLE. Las respuestas no incluyen bearer tokens. No existe aún un inventario unido y verificable por `bridge_run_id` para el child `exec`.
 
 ## Capacidades solicitadas que no se encontraron
 
-- No hay un MCP separado de OpenAI/Codex para edición de archivos o shell; el MCP de documentación OpenAI está configurado globalmente, pero sus tools no están callable en el catálogo directo de este turno.
-- No se encontró configuración MCP dentro de este checkout.
-- PyCharm MCP existe, pero en esta sesión informa un proyecto abierto distinto. No se debe asumir que inspecciona este repositorio.
+- El MCP OpenAI Docs es callable desde el host actual por una búsqueda inocua; la auth sigue `Unknown`.
+- `codex mcp list` expone tres servidores configurados globalmente: Serena, PyCharm y OpenAI Docs. No se encontró configuración MCP versionada en el checkout.
+- El child app-server diagnóstico encontró además `codex_apps`; su origen/configuración para un run CLI no está confirmada.
+- El child app-server diagnosticó timeouts de handshake en Serena y PyCharm. Esto no afecta sus tools host expuestas, pero no habilitó tools en ese child.
+- No se observó `codex_tui` en la configuración CLI ni en el diagnóstico app-server; permanece host-only/no confirmado para children.
 
 ## Codex CLI / app-server / SDK del proceso hijo (verificado 2026-10-06)
 
@@ -192,4 +197,4 @@ The session MCP inventory remains a development-host snapshot. No MCP, skill, AG
 - **PARTIAL:** Python Bridge expone exec resume/fork/review y app-server turn streaming/interrupt; persistent app-server sessions y lifecycle multi-turn siguen sin exponerse.
 - **NOT_CONFIRMED:** entitlement de una cuenta para un modelo que aparece en `model/list`; solo una inferencia exitosa lo confirma.
 
-El inventario directo de este turno enumera 155 tools (142 MCP: Serena 23, PyCharm 37, Codex Apps 73 y Codex TUI 9; más 13 integradas). El inventario informado por la sesión sería 176 (163 MCP más 13 integradas) al incluir Codex Apps 89 y Docs MCP 5. La discrepancia de 21 MCP tools está detallada al inicio y no se resuelve suponiendo callable las herramientas que no aparecen en el catálogo directo. El PyCharm MCP informa un proyecto abierto distinto, por lo que no se asume que apunte a este checkout. Véanse [arquitectura](ARCHITECTURE.md), [contrato Python](CONTRACT.md), [features](FEATURE_CATALOG.md) y [lifecycle](LIFECYCLE.md).
+El snapshot host de este turno expuso 147 MCP tools en cinco namespaces (Apps 73, TUI 9, OpenAI Docs 5, PyCharm 37, Serena 23) y el catálogo global suministró 18 skills. El app-server diagnóstico anunció un inventario distinto: Apps 89, Docs 5, PyCharm 0 y Serena 0; los últimos dos fallaron handshake. No sumar estos conteos entre superficies ni considerarlos constantes. PyCharm host reporta otro proyecto abierto en el catálogo anterior; esta fase no invocó herramientas IDE. Véanse [matriz](CAPABILITY_MATRIX.md), [MCP](MCP.md), [skills](SKILLS.md) y [AGENTS](AGENTS_BEHAVIOR.md).

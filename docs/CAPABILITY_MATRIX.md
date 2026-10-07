@@ -1,5 +1,38 @@
 # Codex app-server capability matrix
 
+## Current 1.0 software closeout snapshot (2026-10-07)
+
+Schema source vocabulary: `AUTHORITATIVE_LOCAL_SCHEMA`, `GENERATED_LOCAL_SCHEMA`,
+`RUNTIME_INTROSPECTION`, `DOCUMENTATION_ONLY`, `NOT_AVAILABLE`. The current
+Python package uses the installed generated local JSON schema; a snapshot
+contains version (when the local version probe succeeds), source type, content
+hash, discovered RPC methods, generation timestamp and parser version. It does
+not retain the full generated schemas. Schema evidence alone is limited;
+initialize is confirmed by handshake and individual RPCs are confirmed only
+after successful runtime responses.
+
+| Area | Classification | Evidence / boundary |
+|---|---|---|
+| Project trust and run security gate | IMPLEMENTED | Typed gate is exercised by direct exec, managed exec, runtime manager and cross-process/daemon tests; unknown MCP state rejects. Trusted acknowledged external side-effect risk is an explicit unfiltered opt-in with warning. |
+| Per-run MCP isolation | NOT_SUPPORTED / KNOWN_LIMITATION | Codex 0.160.1 surface has no verified per-run allow/deny filter or empty-MCP receipt. Classified `NOT_SUPPORTED_BY_CODEX` and `SECURITY_BOUNDARY_DOCUMENTED`; non-blocking while every execution route remains gated. |
+| App-server schema mechanism | IMPLEMENTED / GENERATED_LOCAL_SCHEMA verified | Installed `@openai/codex` 0.160.1 exposes `app-server generate-json-schema`; preflight completed locally on 2026-10-07. Compact snapshot SHA-256 `4a02439823bc98fbbca86d9f934d5a90a638b41ec16c635c8c4448b2b9e14867`, 262 literal protocol method names. This verifies schema generation, not that every method was accepted by a live runtime. |
+| App-server feature preflight | IMPLEMENTED with limitations | Explicit bridge capability→RPC mapping; schema presence yields `SUPPORTED_WITH_LIMITATIONS`, successful runtime method response promotes only that method, method-not-found/known missing schema is negative evidence, absent/corrupt schema remains UNKNOWN. |
+| Required service startup preflight | IMPLEMENTED | Requires local schema evidence for `thread/start`, `turn/start` and successful JSON-RPC initialize before dispatch. UNKNOWN/unsupported prevents app-server startup; exec remains independent. |
+| Structured output over app-server | UNKNOWN | The installed generated schema did not let the bridge associate `outputSchema` with `turn/start`; the bridge does not claim this app-server capability. Exec `--output-schema` is a separate verified CLI capability. |
+| Python package-root exports | FROZEN candidate | Exact allowlist test; `CodexRuntimeManager`, SQLite, scheduler, registry, transport and worker internals stay unexported. `CodexBridge.run` now has a closed explicit signature. |
+| CLI JSON stdout contract | FROZEN candidate | Frozen parser tree and exit map are covered by tests. Finite results emit JSON; stream commands emit JSONL; foreground service logs go to stderr. |
+| Configuration validation | FROZEN candidate | Strict TOML section/key schema, exact prefixed environment names and CLI > environment > TOML > defaults where applicable; no `config_version`, unknown fields fail fast. |
+| JavaScript runtime | REMOVED | ADR-002 records the Python-only decision. Consumer JS sources outside this repository were not changed. |
+
+The table above is the current closeout status. Historical phase tables below
+record evidence at the time and do not override this snapshot. No inference was
+run during this closeout.
+
+> **Canonical audit:** use the classification table near the end of this file
+> for release status. Earlier phase snapshots are retained as historical test
+> evidence; their local `IMPLEMENTED/PARTIAL/PLANNED` labels are not the final
+> 1.0 classification by themselves.
+
 ## Final pre-commit evidence snapshot
 
 | Feature | CODEX_SUPPORT | BRIDGE_SUPPORT | OFFLINE_TESTED | REAL_TESTED |
@@ -7,7 +40,7 @@
 | exec one-shot / structured output / output-last-message | Installed CLI flags discovered | Implemented | Yes, fake CLI | Structured output smoke PASS; one-shot Live Watch not applicable |
 | exec resume / fork / review | Installed subcommands discovered | Implemented as separate exec operations | Yes, fake CLI | Not exercised in this validation |
 | app-server turns and event streams | Local protocol schema observed | Implemented; resident manager experimental | Yes, fake protocol | Live Watch smoke PASS for one turn and lifecycle stream |
-| app-server persistent queue | Supported by bridge manager | Implemented within shared manager | Yes, fake stress | One managed turn dispatched; contention not tested |
+| app-server persistent queue | Supported by bridge manager | Implemented within shared manager | Yes, fake stress | Three sequential turns dispatched on a resumed and forked thread; contention not tested |
 | exec queue through shared dispatcher | CLI supports exec | Implemented by managed `CodexBridge.start`; `run()` remains direct | Fake CLI integration test | No; structured smoke used direct one-shot `run()` |
 | global/backend/profile limits | Bridge resource policy | Shared scheduler enforces global, backend and profile limits | Yes, cross-backend scheduler tests | No contention test |
 | workspace READ/WRITE locks | Bridge resource policy | Shared namespace across scheduled app-server and exec work | Yes, cross-backend scheduler tests | No conflict test |
@@ -15,8 +48,8 @@
 | unified cancel for active exec/app-server | Backend mechanisms differ | Implemented through owning backend; OS fallback remains controlled | Backend tests only | No |
 | watch / inspect / ps | Local registry/events | Implemented with partial replay | Yes | Live Watch smoke PASS; `ps`/`inspect` verified after run |
 | recovery | Local process and scheduler metadata | Partial; claimed unknown work becomes LOST, never auto-replayed | Yes, fake recovery | No |
-| approvals | App-server protocol | Manual approve/reject | Yes, fake protocol | No approval smoke run |
-| MCP / skills / AGENTS child behavior | Codex configuration may expose them | Diagnostic discovery; child visibility/effective-for-run unconfirmed | Resolution logic only | Not confirmed |
+| approvals | App-server protocol | Manual approve/reject; no automatic approval | Yes, fake protocol | Approval request observed as pending, turn reached `WAITING_APPROVAL`, explicit reject resolved it; approval/target not created |
+| MCP / skills / AGENTS effective behavior | Installed config/app-server discovery plus OpenAI Docs | Diagnostic APIs implemented; per-run MCP filtering not implemented | Yes, fake config/MCP/skills fixtures | No real model turns in this phase |
 
 Managed exec and app-server turns share the atomic SQLite scheduler, limits,
 queue and workspace-lock namespace. Direct one-shot `run()` intentionally
@@ -24,7 +57,30 @@ bypasses scheduling. Cross-backend contention and active cancellation remain
 offline-tested, not real-tested.
 
 The development-session MCP/skill catalog does not establish child visibility.
-No child-context smoke was run in this closeout.
+No child-context model smoke was run in this phase because the diagnostic app-server
+advertised external write/deploy/destructive tools and the CLI has no verified
+per-run MCP filter. No run-level AGENTS, skill, or tool callability receipt exists.
+
+## Phase 7: MCP / skills / AGENTS effective behavior (2026-10-06)
+
+| Capability | CODEX_SUPPORT | BRIDGE_SUPPORT | OFFLINE_TESTED | REAL_TESTED | CHILD_VISIBLE | EFFECTIVE_FOR_RUN |
+|---|---|---|---|---|---|---|
+| Host MCP snapshot | Current session tool catalog | Snapshot documented, not runtime API | N/A | Host Docs MCP harmless query succeeded | Host only | N/A |
+| CLI configured MCP inventory | `codex mcp list` | Diagnostic CLI evidence documented | N/A | CLI list observed | Serena, PyCharm, Docs configured/enabled globally | Not run-specific |
+| Diagnostic app-server MCP inventory | `mcpServerStatus/list` | `list_configured_mcps`; advertised names/schema only | Yes, fake protocol | Yes, diagnostic only; Apps 89, Docs 5; Serena/PyCharm handshake failed | Confirmed only for short-lived diagnostic app-server | NOT_CONFIRMED for `exec` |
+| MCP tool invocation from child | Protocol advertises tool descriptions | No bridge invocation/effectiveness receipt | Fake status fixtures only | No tools invoked | NOT_CONFIRMED for `exec`; no Apps writes attempted | NOT_CONFIRMED |
+| Host skills snapshot | Session supplied 18 skills | Documentation snapshot only | N/A | Host supplied catalog | Host only | N/A |
+| Diagnostic `skills/list` | Installed app-server schema | `list_effective_skills`; listing only | Yes | Yes, diagnostic only: 5 enabled `system` entries | Confirmed only for diagnostic app-server | NOT_CONFIRMED for `exec` |
+| Skills selected by `exec` | Official docs describe progressive disclosure and skill locations | No selection receipt exposed | Fixture/list parser only | No | NOT_CONFIRMED | NOT_CONFIRMED |
+| AGENTS root/nested precedence | Official docs describe guidance layers and nearer-file precedence | No loaded-file receipt; marker script exists | No model-free proof | No | NOT_CONFIRMED | NOT_CONFIRMED |
+| Project `.codex/config.toml` trust | Official config reference says project config loads only for trusted projects | `config/read` diagnostic, filtered sources | Yes, fake layer fixtures | Fixture diagnostic had user/system layers and no project layer | Diagnostic only | Exact run trust/effect NOT_CONFIRMED |
+| Per-run MCP allow/deny | No `codex exec` allowlist observed in local help | NOT_SUPPORTED by current Bridge | N/A | N/A | N/A | NOT_SUPPORTED |
+| Luna model | `model/list` listed `gpt-6-luna` | `list_models()` discovery | N/A | No inference; entitlement not tested | Catalog response only | NOT_CONFIRMED |
+
+The harmless documentation queries consume no model turns. No real inference was
+performed; there is no token usage or latency for this phase. `gpt-6-luna` was the
+exact installed `model/list` ID matching OpenAI Docs' GPT-6 Luna name. Listing the
+ID does not prove account entitlement.
 
 ## Live discovery exposure
 
@@ -41,18 +97,26 @@ No child-context smoke was run in this closeout.
 ## Phase 5 runtime manager exposure
 
 Audited against locally installed Codex CLI 0.160.1 and its generated experimental
-v2 schema. OpenAI Developer Docs MCP was not callable in this turn.
+v2 schema. OpenAI Developer Docs MCP was callable for official app-server method
+semantics; the generated local schema remains the installed-version authority.
 
 | Feature | CODEX_SUPPORT | BRIDGE_SUPPORT | OFFLINE_TESTED | REAL_TESTED | CHILD_VISIBLE | EFFECTIVE_FOR_RUN |
 |---|---|---|---|---|---|---|
+| Persistent thread resume | YES: installed experimental `thread/resume` schema | IMPLEMENTED in `CodexRuntimeManager.resume_thread`; verifies returned native ID; distinct from `CodexBridge.resume` (`codex exec resume`) | YES, fake JSON-RPC incl. restart | YES: same ID resumed; next turn recalled marker from prior turn | N/A | Explicit resume reopens context; it does not resume a previous turn |
+| Persistent thread fork | YES: installed experimental `thread/fork` schema | IMPLEMENTED in `fork_thread`; native fork RPC, parent relation persisted, `lastTurnId`/`beforeTurnId` exclusive | YES, fake JSON-RPC | YES: fork had a new ID and parent link; fork turn recalled inherited marker | N/A | Uses server-forked history; ephemeral fork is not resumable |
+| Turn steer | YES: installed experimental `turn/steer`; requires `expectedTurnId`, `input`, `threadId` | IMPLEMENTED as `steer_turn`; active RUNNING turn only | YES, fake JSON-RPC | NO | N/A | Appends input to that active turn; not equivalent to a new turn |
+| Turn status reconciliation | YES: `thread/turns/list`; turn statuses completed/failed/interrupted/inProgress | PARTIAL: on explicit resume, one page up to 100 reconciles matching terminal turn IDs; active turns are not adopted | YES, fake restart/reconciliation | NO | N/A | No automatic reexecution; older/missing IDs remain unknown |
+| Runtime-manager approvals | YES: command/file/permissions approval JSON-RPC requests | IMPLEMENTED: central reader, persistent server-bound decisions, WAITING_APPROVAL, CLI/Python manual resolution, timeout decline | YES, fake protocol including restart-stale and timeout | YES: file-write request listed pending, `WAITING_APPROVAL`, explicit reject resolved; no file created | N/A | Only the live owning server instance can answer; restart marks stale |
+| Transport reconnection | app-server stdio can be restarted locally | PARTIAL: explicit manager `restart()` creates a new transport; threads then require explicit resume | YES, fake manager restart | NO | N/A | No automatic reconnect loop or active-turn adoption |
+| Lifecycle replay / remote deltas | Local DB can retain lifecycle events; no remote delta replay method confirmed | PARTIAL local lifecycle replay; resident-manager deltas/tool payloads are not persisted | YES, fake journal/restart | NO | N/A | `replay_complete=false`; no claim of complete stream replay |
 | Resident owned stdio server | app-server experimental, local help/schema | PARTIAL: `CodexRuntimeManager.start/stop/restart`, one manager process | YES, fake protocol | NO | N/A | Only while manager health is HEALTHY |
 | Shared manager/multiple threads | `thread/start`, persistent threads in schema | PARTIAL: multiple threads through one reader/connection | YES, fake protocol; limit configuration exercised | NO | N/A | Thread creation confirmed only against successful request |
 | Multiple turns/concurrency queue | `turn/start`; protocol does not establish unlimited concurrency | Shared persistent scheduler for app-server turns and managed exec runs | YES, scheduler stress and fake exec | NO | N/A | Direct one-shot `run()` bypasses resource scheduling |
 | Health/metrics | initialize handshake and process state | IMPLEMENTED locally; protocol responsive is represented by successful startup, no periodic probe | YES | NO | N/A | Local process and DB state only |
-| Recovery/reconnect | `thread/resume` and `thread/turns/list` exist in local schema | PARTIAL: SQLite records lifecycle and reports unknown in-flight work; no auto-resume or delta replay | YES, dry-run reconciliation | NO | N/A | No turn is re-executed |
+| Recovery/reconnect | `thread/resume` and `thread/turns/list` exist in local schema | PARTIAL: explicit resume verifies threads and reconciles matching terminal turns; no auto-resume, active-turn adoption, or delta replay | YES, fake restart/reconciliation | NO | N/A | No turn is re-executed |
 | Lock/singleton | OS file lock behavior | IMPLEMENTED using OS advisory lock; process identity not sufficient for remote child re-adoption, which is unsupported | YES, competing manager fake | NO | N/A | One local lock path |
 | Version/capability gates | handshake exposes protocol/server info | PARTIAL: reports handshake; no full local CLI capability negotiation/gates yet | YES, static manager response | NO | N/A | Unknown features remain unknown |
-| Approval RPC in runtime manager | app-server can request command/file/permission approvals | NOT_SUPPORTED in manager; replies with method-not-handled error and persists a sanitized lifecycle error. Existing per-turn `CodexBridge` approval API remains available | YES, protocol behavior covered by prior fake app-server suite; manager fail-closed path not yet dedicated-tested | NO | N/A | Never auto-approves; use existing per-turn API for approvals |
+| Approval RPC in runtime manager | app-server can request command/file/permission approvals | IMPLEMENTED manually through manager-owned request IDs; stale approvals are not resolved after restart | YES, fake protocol | NO | N/A | Manual decision only; timeout decline; never auto-approves |
 | Exec run recovery | CLI process can outlive bridge in some failure modes | NOT_SUPPORTED: no safe exec worker re-adoption | N/A | NO | N/A | None |
 
 Do not interpret Codex support as bridge support. The daemon/proxy is not used;
@@ -61,7 +125,7 @@ on Windows.
 
 ## Phase 4: installed CLI and bridge exposure
 
-Audited on the installed `codex-cli 0.160.0` using local `--help` and generated app-server v2 schemas. OpenAI Developer Docs MCP was registered/enabled according to the global CLI inventory, but was **not callable from this agent turn**; official web docs were used only as secondary context. Run-local facts take precedence.
+Historical Phase 4 audit: installed `codex-cli 0.160.0`, local `--help` and generated app-server v2 schemas. OpenAI Developer Docs MCP was not callable in that earlier agent turn, so official web docs were secondary context. In the Phase 7 session on 2026-10-06, the Docs MCP was callable for harmless documentation queries. Run-local facts take precedence, and host callability does not imply child visibility.
 
 The states in the last two columns refer to child/run behavior and are deliberately not inferred from the current development-session MCP inventory.
 
@@ -129,7 +193,7 @@ Requests requiring a client JSON-RPC response are distinct from notifications:
 | `mcpServer/elicitation/request` | `threadId`, `turnId`, server, mode, message, requested schema | Not auto-approved; currently returns unsupported-method error and emits `ServerError`. |
 | `item/tool/call`, `account/chatgptAuthTokens/refresh`, `attestation/generate`, `currentTime/read`, legacy `applyPatchApproval`, `execCommandApproval` | Version/schema-specific request payload | Not implemented by the Bridge; unsupported methods receive a JSON-RPC error. No auth token refresh/copying is performed. |
 
-Client RPC methods include `initialize`, `thread/start`, `thread/resume`, `thread/fork`, `thread/unsubscribe`, `thread/read`, `thread/turns/list`, `thread/items/list`, `turn/start`, `turn/steer`, `turn/interrupt`, `model/list`, `review/start`, configuration/MCP/skills/plugin/filesystem operations, command/process operations and realtime operations. The Bridge currently calls `initialize`, `thread/start`, `turn/start`, and `turn/interrupt`; model discovery already calls `model/list`. The generated schema includes the exact remaining method names.
+Client RPC methods include `initialize`, `thread/start`, `thread/resume`, `thread/fork`, `thread/unsubscribe`, `thread/read`, `thread/turns/list`, `thread/items/list`, `turn/start`, `turn/steer`, `turn/interrupt`, `model/list`, `review/start`, configuration/MCP/skills/plugin/filesystem operations, command/process operations and realtime operations. The runtime manager calls `thread/start`, `thread/resume`, `thread/fork`, `thread/turns/list`, `turn/start`, `turn/steer`, and `turn/interrupt`; it handles the three schema-confirmed approval request methods. Model discovery also calls `model/list`.
 
 ## Bridge exposure
 
@@ -141,10 +205,40 @@ Client RPC methods include `initialize`, `thread/start`, `thread/resume`, `threa
 | `thread/started`, `turn/started`, message deltas/completion, tools, approvals, turn completion/failure/interruption, protocol errors | IMPLEMENTED normalization where the installed notifications expose them |
 | Unknown notifications | Preserved as `UnknownEvent` with optional sanitized `raw_event` |
 | `turn/interrupt` | IMPLEMENTED against a live handle |
-| Persistent thread resume, fork, send/steer | PLANNED |
+| Persistent thread resume / fork / turn steer | IMPLEMENTED experimentally through `CodexRuntimeManager`; see Phase 6 evidence rows |
 | Resident multi-thread runtime manager | IMPLEMENTED locally; app-server remains experimental |
 | Tool/user-input and MCP elicitation request handling | PARTIAL; surfaced as `ServerError` and declined at JSON-RPC method level |
 | App-server reconnect/replay of transient deltas | PLANNED; only lifecycle events are persisted for replay |
+
+## Final 1.0 audit classification
+
+| Capability | Classification | Evidence / boundary |
+|---|---|---|
+| Python one-shot `exec` | IMPLEMENTED | Fake CLI, previous real structured-output and live-watch evidence |
+| `exec resume`, `fork`, `review` | PARTIAL | Wrappers and fake tests; capability gate checks local subcommand help before launch; real behavior not exercised in final audit |
+| Structured output and last-message capture | IMPLEMENTED | Fake CLI tests; structured-output real smoke previously passed |
+| Persistent thread create/resume/fork and continuation | IMPLEMENTED | Fake protocol tests and previous real persistent-thread smoke |
+| `turn/steer` | PARTIAL | Schema-confirmed and fake-tested; real execution intentionally not required due nondeterministic timing |
+| Manual approvals and reject | IMPLEMENTED | Fake protocol lifecycle; prior real reject smoke passed |
+| Approval accept | PARTIAL | Fake protocol coverage; no real accept smoke; never automatic |
+| Shared exec/app-server queue, limits, locks and cancellation | IMPLEMENTED | Offline cross-backend tests/stress; real contention not tested |
+| Conservative recovery and event replay | PARTIAL | Known lifecycle replay and terminal reconciliation; no delta replay, uncertain work remains LOST/UNKNOWN |
+| Foreground daemon and SQLite control | IMPLEMENTED for foreground service | Fake lifecycle and typed cross-process submissions; final installed-wheel one-turn daemon smoke passed. Native Windows SCM integration is OUT_OF_SCOPE |
+| Health/metrics | PARTIAL | Local snapshots and counters; DB integrity/retention added in this audit, full service-health fault matrix not yet rerun |
+| Retention/maintenance | IMPLEMENTED for explicit maintenance | Dry-run/apply cleanup, preservation boundaries and DB health have offline coverage; no automatic periodic cleanup |
+| CLI/package install | IMPLEMENTED for supported entry points | Wheel/editable and module CLI work; installed `.cmd` is the supported shortcut. The `.exe` generated from `console_scripts` is an environment/toolchain limitation |
+| Version compatibility | PARTIAL | Capability-based result model and exec preflight gates added; app-server method negotiation is incomplete |
+| AGENTS effective behavior | NOT_CONFIRMED | No matching per-run evidence in current audit |
+| Skills effective behavior | NOT_CONFIRMED | Diagnostic listing is not proof of `exec` selection or use |
+| MCP effective behavior/per-run restriction | NOT_SUPPORTED | No verified CLI per-run MCP allow/deny; child effectiveness remains unknown |
+| TUI host tools in child process | NOT_CONFIRMED | Host namespace is distinct; Bridge does not depend on it |
+| Business planning, Jira, pipeline lifecycle | OUT_OF_SCOPE | Belongs to consumers |
+| Native Windows Service Control Manager integration | NOT_SUPPORTED | Use foreground process with documented external supervisor |
+| Safe attach to arbitrary active Codex session | NOT_SUPPORTED | Watch is read-only; attach semantics are not offered |
+
+`Codex support`, `Bridge support`, offline verification, real verification and
+child-effective status are separate facts. This audit does not promote a host
+session MCP/skill inventory to child or run-level availability.
 
 The upstream [Python SDK client implementation](https://github.com/openai/codex/blob/main/sdk/python/src/openai_codex/client.py) is a useful reference, but the package is not installed as a runtime dependency here.
 
@@ -152,15 +246,20 @@ The upstream [Python SDK client implementation](https://github.com/openai/codex/
 
 This is a development-session inventory, not a claim about the environment inherited by a Codex subprocess. See [`TOOLS_CATALOG.md`](TOOLS_CATALOG.md) for definitions, profile posture and per-MCP details.
 
-| MCP namespace | Session inventory | Configured | Enabled | Callable in this turn | Auth status | Child-visible | Effective for a bridge run |
-|---|---:|---|---|---|---|---|
-| `codex_apps` | 89 reported; 73 definitions visible to this agent | Unknown (Codex Apps host) | Exposed by host | 73 definitions exposed; 89-count inventory not callable here | Unknown | Unknown | Unknown |
-| `codex_tui` | 9 | Unknown (Codex TUI host) | Exposed by host | Yes, nine tools | Unknown | Unknown | Unknown |
-| `openaideveloperdocs` | 5 reported; no callable definitions exposed to this agent | Yes, global `codex mcp list` entry | Yes, `enabled` | Not confirmed; harmless tool call unavailable in this turn | `Unknown` from CLI | Unknown | Unknown |
-| `pycharm` | 37 | Yes, global CLI entry observed | Exposed by host | Yes, 37 tools | `Unsupported` from CLI | Unknown | Unknown; current IDE project differs from this checkout |
-| `serena` | 23 | Yes, global CLI entry observed | Exposed by host | Yes, 23 tools | `Unsupported` from CLI | Unknown | Unknown |
+| MCP namespace | Host `SESSION_VISIBLE` | CLI `CONFIGURED` / `ENABLED` | Host `CALLABLE` | Diagnostic child `CHILD_VISIBLE` / advertised | Auth status | `EFFECTIVE_FOR_RUN` |
+|---|---|---|---|---|---|---|
+| `codex_apps` | 73 host tools | Not in CLI list; app-server entry observed, enabled unknown | Schemas exposed, not called | Yes; 89 descriptors | Unknown | Unknown for `exec` |
+| `codex_tui` | 9 host tools | Not in CLI list | Schemas exposed, not called | Not observed | Unknown | Unknown |
+| `openaideveloperdocs` | 5 host tools | Yes / enabled | Confirmed by one harmless docs search | Yes; 5 descriptors, not invoked in child | `Unknown` in CLI | Unknown for `exec` |
+| `pycharm` | 37 host tools | Yes / enabled | Host schemas exposed, not called | Config entry visible; handshake timeout, 0 descriptors | `Unsupported` in CLI | Unknown |
+| `serena` | 23 host tools | Yes / enabled | Host schemas exposed, not called | Config entry visible; handshake timeout, 0 descriptors | `Unsupported` in CLI | Unknown |
 
-The session tool inventory currently available to this agent does not match all counts reported for the session: it exposes 73 `codex_apps` definitions, and no `openaideveloperdocs` definitions, while the supplied inventory reports 89 and 5 respectively. This difference is preserved rather than assuming deferred/unseen tools are callable. The OpenAI Docs MCP is registered and enabled globally, auth status is `Unknown`, but its callability was not verified. An official web search found [OpenAI Docs MCP guidance](https://developers.openai.com/learn/docs-mcp); this is not an MCP invocation.
+The observed host total is 147 tools across these five namespaces. The app-server
+child counts are a different surface and are not added to the host total. The host
+catalog supplied 18 skills; diagnostic `skills/list` returned five enabled
+`system` entries. Resource counts are unknown because generic resource enumeration
+did not return. `codex login status` confirmed ChatGPT login; no credential values
+were read or emitted.
 
 ### State semantics
 
@@ -187,3 +286,36 @@ Codex Apps includes potentially powerful external integrations such as Atlassian
 | Workspace READ/WRITE locks | N/A (bridge-local) | IMPLEMENTED | YES, including 50-job fake stress | NO |
 | Queue recovery | N/A (bridge-local) | IMPLEMENTED; unclaimed work restored, claimed work becomes LOST | YES | NO |
 | Active run cancellation through CLI | Backend-dependent | IMPLEMENTED for scheduled exec; app-server routed to owner | YES, fake coverage | NO |
+
+## Resident service / daemon
+
+| Capability | Codex support | Bridge support | Offline tested | Real tested | Notes |
+|---|---|---|---|---|---|
+| Foreground resident service | N/A | IMPLEMENTED | YES, fake subprocess | NO | Owns runtime manager and shared local scheduler until shutdown |
+| Singleton per state DB | N/A | IMPLEMENTED | YES, duplicate fake start rejected | NO | OS advisory lock is authoritative; heartbeat/PID are diagnostic |
+| Local service control IPC | N/A | IMPLEMENTED | YES, SQLite request/response | NO | Same-user local state directory trust model; no network listener |
+| Health and service status CLI | N/A | IMPLEMENTED | YES, fake subprocess/API | NO | Sanitized SQLite snapshot; status does not prove model/API health |
+| Metrics CLI | N/A | IMPLEMENTED | YES, fake subprocess/API | NO | Only counters actually available are reported; token usage may be null |
+| TOML config and validation | N/A | IMPLEMENTED | YES, precedence/type/path fixtures | NO | CLI > supported env > file > defaults for supported settings |
+| Graceful stop/restart request | N/A | IMPLEMENTED | YES, fake service stop | NO | WAIT/INTERRUPT/FORCE; process restart launches a new local process |
+| Startup recovery | N/A | PARTIAL | YES, existing fake recovery | NO | Conservative; uncertain claimed runs are not replayed |
+| Cross-process turn submission | N/A | IMPLEMENTED for typed commands | YES, fake daemon | NO inference | `SUBMIT_EXEC_RUN`, `CREATE_THREAD`, and `START_TURN` use the shared SQLite command queue |
+| Windows SCM service integration | N/A | OUT_OF_SCOPE | NO | NO | Foreground ready; external supervisor guidance only |
+| Automatic periodic data retention | N/A | PLANNED | NO | NO | Explicit `maintenance clean` performs retention; the service does not schedule it periodically |
+# Cross-process daemon submissions
+
+| Capability | Codex support | Bridge support | Offline tested | Real tested |
+|---|---|---|---|---|
+| Service command queue / typed submit | N/A (bridge control plane) | IMPLEMENTED: `SUBMIT_EXEC_RUN`, `CREATE_THREAD`, `START_TURN` | Yes, including idempotency, claim recovery and fake-daemon CLI flow | No Codex inference; fake daemon only |
+| Windows module entry point | N/A | IMPLEMENTED | `python -m p4_codex_bridge --version` passes | VERIFIED |
+| Windows CMD launcher | N/A | IMPLEMENTED | Wrapper uses the adjacent environment Python; wheel installs it under `Scripts`; package/module validation passes | VERIFIED |
+| Windows console-script EXE | N/A | ENVIRONMENT_LIMITATION | P4 and independent tiny launcher `.exe` hang while their Python invocation works; no lower-level cause established | Not required; do not execute in doctor |
+
+## 2026-10-07 final release gate
+
+| Capability | Codex support | Bridge support | Offline tested | Real tested | Evidence / limit |
+|---|---|---|---|---|---|
+| Installed-wheel foreground daemon | Codex 0.160.1 app-server | IMPLEMENTED for tested lifecycle | YES | YES, one turn | Fresh wheel venv; cross-process `CREATE_THREAD`/`START_TURN`, read-only watch, exact `OK`, graceful stop. Effective model and usage are not exposed. |
+| Service cleanup after completed turn | N/A (bridge-local) | IMPLEMENTED for tested path | YES | YES | STOPPED, 0 active runs, queue, locks, approvals and pending payloads. |
+| App-server required RPCs in daemon | Local generated schema plus runtime handshake | SUPPORTED_WITH_LIMITATIONS | YES | YES for create/start path | Schema source `GENERATED_LOCAL_SCHEMA`; runtime smoke passed one create/start path. Not a guarantee for optional protocol methods. |
+| Luna model selection | Model catalog listed `gpt-6-luna` | Explicit request supported | N/A | Requested; effective model NOT_CONFIRMED | Catalog listed seven models; one requested turn completed, but app-server did not report effective model identity. |

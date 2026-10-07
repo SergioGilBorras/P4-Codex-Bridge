@@ -45,13 +45,13 @@ def redact_structured(value: Any) -> Any:
 def codex_environment() -> dict[str, str]:
     names = (
         "PATH", "PATHEXT", "SystemRoot", "WINDIR", "USERPROFILE", "APPDATA",
-        "LOCALAPPDATA", "CODEX_HOME", "TEMP", "TMP", "HOME", "CODEX_BIN",
+        "LOCALAPPDATA", "CODEX_HOME", "TEMP", "TMP", "HOME", "P4_CODEX_BRIDGE_CODEX_EXECUTABLE",
     )
     return {name: os.environ[name] for name in names if name in os.environ}
 
 
 def resolve_codex_command() -> list[str]:
-    override = os.environ.get("CODEX_BIN")
+    override = os.environ.get("P4_CODEX_BRIDGE_CODEX_EXECUTABLE")
     if override:
         path = Path(override)
         if path.suffix.lower() in {".py", ".js"}:

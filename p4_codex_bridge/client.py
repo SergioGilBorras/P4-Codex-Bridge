@@ -19,11 +19,14 @@ from typing import Any
 from . import __version__
 from ._worker import _identity, _terminate_tree
 from .events import ApprovalError
+from .errors import CapabilityUnavailableError
 from .models import (
     AppServerApprovalPolicy, ApprovalHandlingPolicy, ApprovalPolicy, BridgeRun,
     ConfigPolicy, ModelVerbosity, ReasoningSummary, RunResult, RunStatus, SandboxMode,
 )
 from .permissions import CodexPermissions, CwdPolicy
+from .security import RunSecurityPolicy, validate_run_security
+from .app_server_capabilities import AppServerCapabilitySet, discover_app_server_capabilities
 from .profiles import PROFILES, get_profile
 from .registry import RunRegistry
 from .runtime import codex_environment, probe, redact, resolve_codex_command
@@ -42,6 +45,8 @@ class CodexBridge:
         state_dir: str | Path | None = None,
         allowed_roots: tuple[str | Path, ...] | list[str | Path] = (),
         default_timeout_seconds: float = 300,
+        default_security_policy: RunSecurityPolicy | None = None,
+        app_server_capability_override: AppServerCapabilitySet | None = None,
     ) -> None:
         if state_dir is None:
             configured_state = os.environ.get("P4_CODEX_BRIDGE_STATE_DIR")
@@ -59,6 +64,12 @@ class CodexBridge:
         if isinstance(default_timeout_seconds, bool) or not isinstance(default_timeout_seconds, (int, float)) or not 0 < default_timeout_seconds <= 3600:
             raise ValueError("default_timeout_seconds must be in range (0, 3600]")
         self.default_timeout_seconds = float(default_timeout_seconds)
+        if default_security_policy is not None and not isinstance(default_security_policy, RunSecurityPolicy):
+            raise TypeError("default_security_policy must be RunSecurityPolicy")
+        self.default_security_policy = default_security_policy or RunSecurityPolicy()
+        self._app_server_capability_override = app_server_capability_override
+        self._app_server_capabilities: AppServerCapabilitySet | None = app_server_capability_override
+        self._capability_probe_cache: dict[tuple[str, ...], str] = {}
         self._turns: dict[str, Any] = {}
         self._turn_lock = threading.RLock()
         self._cleanup_stale_files()
@@ -150,6 +161,22 @@ class CodexBridge:
         output = probe(["--version"])
         return output.strip().splitlines()[0] if output.strip() else ""
 
+    def _require_app_server_capability(self, feature: str) -> None:
+        if self._app_server_capabilities is None:
+            self._app_server_capabilities = discover_app_server_capabilities(timeout=10)
+        self._app_server_capabilities.require(feature)
+
+    def _require_exec_capability(self, operation: str, *, flag: str | None = None) -> None:
+        args = ["exec", operation, "--help"] if operation in {"resume", "fork", "review"} else ["exec", "--help"]
+        key = tuple(args)
+        if key not in self._capability_probe_cache:
+            self._capability_probe_cache[key] = probe(args)
+        output = self._capability_probe_cache[key]
+        supported = "Usage:" in output and (flag is None or flag in output)
+        if not supported:
+            requested = f"exec.{operation}" if operation in {"resume", "fork", "review"} else f"exec.{flag.lstrip('-').replace('-', '_')}"
+            raise CapabilityUnavailableError(f"Codex capability {requested} is not exposed by the installed CLI")
+
     def get_capabilities(self) -> dict[str, Any]:
         root_help = probe(["--help"])
         exec_help = probe(["exec", "--help"])
@@ -158,9 +185,16 @@ class CodexBridge:
         review_help = probe(["exec", "review", "--help"])
         app_help = probe(["app-server", "--help"])
         version = self.get_version()
+        if self._app_server_capabilities is None:
+            self._app_server_capabilities = discover_app_server_capabilities(timeout=10)
+        app_caps = self._app_server_capabilities
 
         def capability(supported: bool, source: str, *, experimental: bool = False, notes: tuple[str, ...] = ()) -> dict[str, Any]:
             return {"status": "SUPPORTED" if supported else "NOT_SUPPORTED", "source": source, "experimental": experimental, "notes": list(notes)}
+
+        def observed(feature: str, notes: tuple[str, ...] = ()) -> dict[str, Any]:
+            return {"status": app_caps.status(feature).value, "source": app_caps.source,
+                    "experimental": True, "notes": list(notes)}
 
         cli_source = f"installed CLI {version} --help"
         exec_available = "Usage:" in exec_help
@@ -203,10 +237,19 @@ class CodexBridge:
                 "source": cli_source,
                 "experimental": "experimental" in app_help.lower(),
                 "transports": [item for item in ("stdio://", "unix://", "ws://") if item in app_help],
+                "capability_snapshot": app_caps.to_dict(),
+                "compatibility": {"app_server_available": "Usage:" in app_help,
+                    "protocol_compatible": all(app_caps.status(feature).value == "SUPPORTED" for feature in ("app_server.thread.create", "app_server.turn.start")),
+                    "missing_required_features": [feature for feature in ("app_server.thread.create", "app_server.turn.start") if app_caps.status(feature).value == "UNSUPPORTED"],
+                    "limited_features": [feature for feature, status in app_caps.statuses.items() if status.value == "SUPPORTED_WITH_LIMITATIONS"],
+                    "unknown_features": [feature for feature, status in app_caps.statuses.items() if status.value == "UNKNOWN"],
+                    "warnings": [app_caps.error] if app_caps.error else []},
             },
-            "models": capability(True, "installed app-server schema: model/list; runtime query list_models()", experimental=True, notes=("Listed models do not establish account entitlement.",)),
+            "models": {"status": "PARTIAL", "bridge_support": "IMPLEMENTED",
+                       "codex_support": observed("app_server.models.list", ("Listed models do not establish account entitlement.",))},
             "permissions": {
                 "status": "PARTIAL",
+                "codex_support": observed("app_server.config.read"),
                 "source": cli_source + " and generated app-server schema",
                 "experimental": True,
                 "sandbox_modes_exec": [mode.value for mode in SandboxMode if mode.value in exec_help],
@@ -218,6 +261,7 @@ class CodexBridge:
             },
             "config": {
                 "status": "PARTIAL",
+                "codex_support": observed("app_server.mcp.list"),
                 "source": cli_source + " and app-server config/read schema",
                 "experimental": True,
                 "policies": {
@@ -230,6 +274,7 @@ class CodexBridge:
             },
             "mcp": {
                 "status": "PARTIAL",
+                "codex_support": observed("app_server.skills.list"),
                 "source": "installed app-server schema mcpServerStatus/list",
                 "experimental": True,
                 "session_visible": "NOT_INSPECTABLE_FROM_BRIDGE",
@@ -266,6 +311,7 @@ class CodexBridge:
 
     def list_models(self, *, include_hidden: bool = False, timeout_seconds: float = 30) -> list[dict[str, Any]]:
         """Fetch the installed app-server model catalog; it is not an entitlement check."""
+        self._require_app_server_capability("app_server.models.list")
         process = subprocess.Popen(
             resolve_codex_command() + ["app-server", "--listen", "stdio://"],
             stdin=subprocess.PIPE,
@@ -444,6 +490,7 @@ class CodexBridge:
     ) -> dict[str, Any]:
         """Return a secret-free whitelist of effective settings and their layer origins."""
         policy, overrides = self._normalize_policy(config_policy, config_overrides)
+        self._require_app_server_capability("app_server.config.read")
         root = self.cwd_policy.resolve(cwd)
         result = self._app_server_request("config/read", {"cwd": str(root), "includeLayers": True}, cwd=root, timeout_seconds=timeout_seconds, config_overrides=overrides)
         raw_config = result.get("config", {})
@@ -452,7 +499,7 @@ class CodexBridge:
         sources: dict[str, str] = {}
         for key, item in result.get("origins", {}).items():
             name = item.get("name", {}) if isinstance(item, dict) else {}
-            if isinstance(name, dict) and isinstance(name.get("type"), str):
+            if key in fields and isinstance(name, dict) and isinstance(name.get("type"), str):
                 sources[str(key)] = name["type"]
         layers = []
         for item in result.get("layers") or []:
@@ -467,6 +514,7 @@ class CodexBridge:
     ) -> list[dict[str, Any]]:
         """Discover MCP servers in a diagnostic app-server using the selected cwd/config."""
         policy, overrides = self._normalize_policy(config_policy, config_overrides)
+        self._require_app_server_capability("app_server.mcp.list")
         root = self.cwd_policy.resolve(cwd)
         response = self._app_server_request(
             "mcpServerStatus/list", {"detail": "toolsAndAuthOnly", "limit": 1000},
@@ -481,13 +529,15 @@ class CodexBridge:
             # The status API advertises tools but does not invoke them. Keep
             # callable unknown even when the diagnostic server is connected.
             callable_status = False if status in {"disabled", "failed", "cancelled"} else None
+            raw_auth_status = item.get("authStatus")
+            safe_auth_status = raw_auth_status if raw_auth_status in {"unknown", "unsupported", "Unknown", "Unsupported"} else "unknown"
             rows.append({
                 "name": item.get("name"), "config_policy": policy,
                 "session_visible": None, "configured": True, "enabled": enabled,
                 "tools_advertised": bool(tool_names),
                 "callable": callable_status, "child_visible": True,
                 "child_context": "diagnostic_app_server",
-                "effective_for_run": None, "auth_status": item.get("authStatus", "unknown"),
+                "effective_for_run": None, "auth_status": safe_auth_status,
                 "runtime_status": status, "tool_count": len(tool_names), "tools": tool_names,
                 "tools_error": redact(item.get("toolsError") or "") or None,
             })
@@ -498,6 +548,7 @@ class CodexBridge:
         config_overrides: dict[str, Any] | None = None, timeout_seconds: float = 30,
     ) -> list[dict[str, Any]]:
         policy, overrides = self._normalize_policy(config_policy, config_overrides)
+        self._require_app_server_capability("app_server.skills.list")
         root = self.cwd_policy.resolve(cwd)
         response = self._app_server_request("skills/list", {"cwds": [str(root)], "forceReload": True}, cwd=root, timeout_seconds=timeout_seconds, config_overrides=overrides)
         skills = []
@@ -519,9 +570,16 @@ class CodexBridge:
     def get_effective_capabilities(
         self, *, cwd: str | Path | None = None, config_policy: str | ConfigPolicy = ConfigPolicy.PROJECT,
         config_overrides: dict[str, Any] | None = None, model: str | None = None,
-        permissions: CodexPermissions | None = None,
+        permissions: CodexPermissions | None = None, include_diagnostics: bool = False,
     ) -> dict[str, Any]:
-        """Resolve what can be observed locally while preserving unknown run-level state."""
+        """Return capabilities without promoting diagnostic-child evidence to run evidence.
+
+        ``include_diagnostics`` performs short-lived app-server queries for config, MCPs,
+        and skills. Those observations describe that diagnostic child only; they do not
+        establish what a separate ``codex exec`` run can call.
+        """
+        if not isinstance(include_diagnostics, bool):
+            raise ValueError("include_diagnostics must be boolean")
         report = self.get_capabilities()
         unknown = {"session_visible": None, "configured": None, "enabled": None, "callable": None, "child_visible": None, "effective_for_run": None}
         report["effective"] = {
@@ -534,7 +592,36 @@ class CodexBridge:
             "approvals": {**unknown, "status": "REQUESTED" if permissions else "PROFILE_OR_DEFAULT", "requested_approval_policy": AppServerApprovalPolicy(permissions.approval_policy).value if permissions else None},
         }
         if cwd is not None:
-            report["effective"]["cwd"] = str(self.cwd_policy.resolve(cwd))
+            root = self.cwd_policy.resolve(cwd)
+            report["effective"]["cwd"] = str(root)
+            if include_diagnostics:
+                try:
+                    selected_policy = ConfigPolicy(config_policy)
+                except ValueError as exc:
+                    raise ValueError("config_policy must be isolated, project or explicit") from exc
+                if selected_policy == ConfigPolicy.ISOLATED:
+                    unavailable = {"status": "NOT_SUPPORTED", "scope": "diagnostic_app_server", "reason": "app-server has no equivalent of exec --ignore-user-config"}
+                    report["effective"]["mcp"]["diagnostic_child"] = dict(unavailable)
+                    report["effective"]["skills"]["diagnostic_child"] = dict(unavailable)
+                    report["effective"]["config"]["diagnostic_child"] = dict(unavailable)
+                else:
+                    diagnostic: dict[str, Any] = {"scope": "short_lived_app_server", "config_policy": selected_policy.value}
+                    for key, operation in (
+                        ("config", lambda: self.get_effective_config(cwd=root, config_policy=selected_policy, config_overrides=config_overrides)),
+                        ("mcp", lambda: self.list_configured_mcps(cwd=root, config_policy=selected_policy, config_overrides=config_overrides)),
+                        ("skills", lambda: self.list_effective_skills(cwd=root, config_policy=selected_policy, config_overrides=config_overrides)),
+                    ):
+                        try:
+                            diagnostic[key] = {"status": "CONFIRMED", "data": operation()}
+                        except Exception as exc:
+                            diagnostic[key] = {"status": "ERROR", "error_class": type(exc).__name__}
+                    report["effective"]["config"]["diagnostic_child"] = diagnostic["config"]
+                    report["effective"]["mcp"]["diagnostic_child"] = diagnostic["mcp"]
+                    report["effective"]["skills"]["diagnostic_child"] = diagnostic["skills"]
+                report["diagnostic_child"] = {"kind": "app-server", "scope": "short_lived", "results": {
+                    key: report["effective"][key]["diagnostic_child"] for key in ("config", "mcp", "skills")}}
+        elif include_diagnostics:
+            raise ValueError("cwd is required when include_diagnostics=True")
         return report
 
     def start_turn(
@@ -545,10 +632,15 @@ class CodexBridge:
         approval_timeout_policy: str = "reject",
         approval_handling_policy: ApprovalHandlingPolicy = ApprovalHandlingPolicy.MANUAL,
         queue_size: int = 256, metadata: dict[str, Any] | None = None, announce_run: bool = False,
+        security_policy: RunSecurityPolicy | None = None,
     ):
         """Start a live app-server turn. Closing its CodexTurn closes only this managed server."""
         from .app_server import start_turn
+        self._require_app_server_capability("app_server.thread.create")
+        self._require_app_server_capability("app_server.turn.start")
         resolved_cwd = self.cwd_policy.resolve(cwd)
+        security_policy = security_policy or self.default_security_policy
+        security_result = validate_run_security(security_policy, backend="app-server", config_policy="project", cwd=resolved_cwd)
         selected_permissions = permissions or get_profile(profile).permissions
         writable_roots = self.cwd_policy.resolve_writable_roots(selected_permissions.writable_roots, cwd=resolved_cwd)
         approval_policy = app_server_approval_policy or selected_permissions.approval_policy.value
@@ -557,7 +649,7 @@ class CodexBridge:
         metadata = _clean_metadata(metadata or {})
         bridge_run_id = "br_" + uuid.uuid4().hex[:12]
         self.registry.create(bridge_run_id, backend="app-server", cwd=str(resolved_cwd), model=model, profile=profile,
-                             result_path="", agent_metadata=metadata, permissions=selected_permissions.to_dict() if hasattr(selected_permissions, "to_dict") else {"sandbox": selected_permissions.sandbox.value, "approval_policy": selected_permissions.approval_policy.value, "writable_roots": [str(x) for x in selected_permissions.writable_roots]}, config_policy="project")
+                             result_path="", agent_metadata=metadata, permissions=selected_permissions.to_dict() if hasattr(selected_permissions, "to_dict") else {"sandbox": selected_permissions.sandbox.value, "approval_policy": selected_permissions.approval_policy.value, "writable_roots": [str(x) for x in selected_permissions.writable_roots]}, config_policy="project", security_snapshot={"project_trust": security_policy.project_trust.value, "policy_id": security_result.policy_id, "risk_acknowledged": security_policy.explicit_risk_acknowledgement, "mcp_isolation_required": security_policy.require_mcp_isolation, "decision": security_result.decision.value})
         try:
             turn = start_turn(
             prompt, cwd=resolved_cwd, model=model, sandbox=selected_permissions.sandbox,
@@ -712,7 +804,7 @@ class CodexBridge:
         raise KeyError(turn_id)
 
     def list_pending_approvals(self) -> list[dict[str, Any]]:
-        return self.registry.list_approvals(pending_only=True)
+        return self.registry.list_approvals(pending_only=True) + self.registry.list_runtime_approvals(pending_only=True)
 
     def approve(self, approval_id: str) -> None:
         self._resolve_approval(approval_id, approve=True)
@@ -721,6 +813,11 @@ class CodexBridge:
         self._resolve_approval(approval_id, approve=False)
 
     def _resolve_approval(self, approval_id: str, *, approve: bool) -> None:
+        try:
+            self.registry.submit_runtime_approval_decision(approval_id, "accept" if approve else "decline")
+            return
+        except KeyError:
+            pass
         try:
             self.registry.submit_approval_decision(approval_id, "accept" if approve else "decline")
         except KeyError as exc:
@@ -762,6 +859,7 @@ class CodexBridge:
         announce_run: bool = False,
         access_mode: str = "READ",
         resource_priority: int = 0,
+        security_policy: RunSecurityPolicy | None = None,
     ) -> BridgeRun:
         """Submit an asynchronous exec job through the shared persistent resource queue."""
         request = self._validate_request(
@@ -770,6 +868,7 @@ class CodexBridge:
             reasoning_summary=reasoning_summary, verbosity=verbosity, output_schema=output_schema,
             capture_last_message=capture_last_message, include_raw_output=include_raw_output,
             config_policy=config_policy, config_overrides=config_overrides,
+            security_policy=security_policy,
         )
         if not isinstance(announce_run, bool): raise ValueError("announce_run must be boolean")
         request["operation"] = "run"
@@ -787,10 +886,11 @@ class CodexBridge:
             "writable_roots": [str(x) for x in effective_permissions.writable_roots]}
 
         def insert_registry_row(db, bridge_run_id: str) -> None:
-            db.execute("INSERT INTO runs(bridge_run_id,backend,cwd,model,profile,started_at,status,result_path,agent_metadata_json,permissions_json,config_policy) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            db.execute("INSERT INTO runs(bridge_run_id,backend,cwd,model,profile,started_at,status,result_path,agent_metadata_json,permissions_json,config_policy,security_snapshot_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (bridge_run_id, "exec", request["cwd"], model, profile, now, RunStatus.QUEUED.value,
                  str(result_path), json.dumps(safe_metadata, ensure_ascii=False),
-                 json.dumps(permissions_data, ensure_ascii=False), request.get("config_policy")))
+                 json.dumps(permissions_data, ensure_ascii=False), request.get("config_policy"),
+                 json.dumps(request.get("security_snapshot", {}), ensure_ascii=False)))
 
         scheduler = ResourceScheduler(self.registry.path)
         scheduler.submit(turn_id=run_id, thread_id=run_id, backend="exec", profile=profile,
@@ -825,7 +925,12 @@ class CodexBridge:
         config_overrides: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         announce_run: bool = False,
+        security_policy: RunSecurityPolicy | None = None,
     ) -> BridgeRun:
+        if output_schema is not None:
+            self._require_exec_capability("run", flag="--output-schema")
+        if capture_last_message:
+            self._require_exec_capability("run", flag="--output-last-message")
         request = self._validate_request(
             prompt, cwd=cwd, profile=profile, model=model,
             timeout_seconds=timeout_seconds, permissions=permissions,
@@ -833,6 +938,7 @@ class CodexBridge:
             verbosity=verbosity, output_schema=output_schema,
             capture_last_message=capture_last_message, include_raw_output=include_raw_output,
             config_policy=config_policy, config_overrides=config_overrides,
+            security_policy=security_policy,
         )
         request["operation"] = "run"
         if not isinstance(announce_run, bool): raise ValueError("announce_run must be boolean")
@@ -863,6 +969,7 @@ class CodexBridge:
             permissions={"sandbox": permissions.sandbox.value, "approval_policy": permissions.approval_policy.value,
                          "network_access": permissions.network_access, "writable_roots": [str(x) for x in permissions.writable_roots]} if permissions else None,
             config_policy=config_policy,
+            security_snapshot=request.get("security_snapshot"),
         )
         command = [sys.executable, "-m", "p4_codex_bridge._worker", "--db", str(self.registry.path), "--run-id", run_id]
         worker_env = codex_environment()
@@ -925,9 +1032,43 @@ class CodexBridge:
             error={"code": "BRIDGE_RESULT_MISSING", "message": record.last_error or "No result was written"},
         )
 
-    def run(self, prompt: str, **options: Any) -> RunResult:
-        timeout = options.get("timeout_seconds")
-        announce = bool(options.pop("announce_run", False))
+    def run(
+        self,
+        prompt: str,
+        *,
+        cwd: str | Path,
+        profile: str = "analysis",
+        model: str | None = None,
+        timeout_seconds: float | None = None,
+        permissions: CodexPermissions | None = None,
+        reasoning_effort: str | None = None,
+        reasoning_summary: ReasoningSummary | str | None = None,
+        verbosity: ModelVerbosity | str | None = None,
+        output_schema: dict[str, Any] | None = None,
+        capture_last_message: bool = False,
+        include_raw_output: bool = False,
+        config_policy: str | None = None,
+        config_overrides: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        announce_run: bool = False,
+        security_policy: RunSecurityPolicy | None = None,
+    ) -> RunResult:
+        """Run one direct exec job and wait for its collected result."""
+        timeout = timeout_seconds
+        announce = announce_run
+        options = {
+            "cwd": cwd, "profile": profile, "model": model,
+            "timeout_seconds": timeout_seconds, "permissions": permissions,
+            "reasoning_effort": reasoning_effort, "reasoning_summary": reasoning_summary,
+            "verbosity": verbosity, "output_schema": output_schema,
+            "capture_last_message": capture_last_message, "include_raw_output": include_raw_output,
+            "config_policy": config_policy, "config_overrides": config_overrides,
+            "metadata": metadata, "security_policy": security_policy,
+        }
+        if output_schema is not None:
+            self._require_exec_capability("run", flag="--output-schema")
+        if capture_last_message:
+            self._require_exec_capability("run", flag="--output-last-message")
         record = self._start_direct(prompt, announce_run=False, **options)
         if announce: logging.getLogger("p4_codex_bridge.announce").info(self.format_run_announcement(record.bridge_run_id))
         result = self._collect_result(record, timeout)
@@ -949,6 +1090,7 @@ class CodexBridge:
         confirm_inherited_permissions: bool = False,
         review_uncommitted: bool = False, review_base: str | None = None,
         review_commit: str | None = None, review_title: str | None = None,
+        security_policy: RunSecurityPolicy | None = None,
     ) -> dict[str, Any]:
         if operation not in {"resume", "fork", "review"}:
             raise ValueError("unsupported advanced Codex operation")
@@ -977,6 +1119,7 @@ class CodexBridge:
             verbosity=verbosity, output_schema=output_schema,
             capture_last_message=capture_last_message, include_raw_output=include_raw_output,
             config_policy=config_policy, config_overrides=config_overrides,
+            security_policy=security_policy,
         )
         if operation == "review":
             request["prompt"] = prompt
@@ -992,6 +1135,11 @@ class CodexBridge:
         return request
 
     def _run_advanced(self, request: dict[str, Any]) -> RunResult:
+        self._require_exec_capability(request["operation"])
+        if request.get("output_schema") is not None:
+            self._require_exec_capability("run", flag="--output-schema")
+        if request.get("capture_last_message"):
+            self._require_exec_capability("run", flag="--output-last-message")
         record = self._launch_request(request, profile="analysis")
         return self._collect_result(record, request["timeout_seconds"])
 
@@ -1002,6 +1150,7 @@ class CodexBridge:
         capture_last_message: bool = False, include_raw_output: bool = False,
         reasoning_effort: str | None = None, reasoning_summary: ReasoningSummary | str | None = None,
         verbosity: ModelVerbosity | str | None = None, confirm_inherited_permissions: bool = False,
+        security_policy: RunSecurityPolicy | None = None,
     ) -> RunResult:
         """Run `codex exec resume`; this is not `app-server thread/resume`."""
         request = self._validated_advanced_request(
@@ -1011,6 +1160,7 @@ class CodexBridge:
             capture_last_message=capture_last_message, include_raw_output=include_raw_output,
             reasoning_effort=reasoning_effort, reasoning_summary=reasoning_summary,
             verbosity=verbosity, confirm_inherited_permissions=confirm_inherited_permissions,
+            security_policy=security_policy,
         )
         return self._run_advanced(request)
 
@@ -1021,6 +1171,7 @@ class CodexBridge:
         capture_last_message: bool = False, include_raw_output: bool = False,
         reasoning_effort: str | None = None, reasoning_summary: ReasoningSummary | str | None = None,
         verbosity: ModelVerbosity | str | None = None, confirm_inherited_permissions: bool = False,
+        security_policy: RunSecurityPolicy | None = None,
     ) -> RunResult:
         """Run `codex exec fork` and return the fork thread ID when emitted."""
         request = self._validated_advanced_request(
@@ -1030,6 +1181,7 @@ class CodexBridge:
             capture_last_message=capture_last_message, include_raw_output=include_raw_output,
             reasoning_effort=reasoning_effort, reasoning_summary=reasoning_summary,
             verbosity=verbosity, confirm_inherited_permissions=confirm_inherited_permissions,
+            security_policy=security_policy,
         )
         return self._run_advanced(request)
 
@@ -1042,6 +1194,7 @@ class CodexBridge:
         capture_last_message: bool = False, include_raw_output: bool = False,
         reasoning_effort: str | None = None, reasoning_summary: ReasoningSummary | str | None = None,
         verbosity: ModelVerbosity | str | None = None,
+        security_policy: RunSecurityPolicy | None = None,
     ) -> RunResult:
         """Run the installed `codex exec review` against one supported repository target."""
         request = self._validated_advanced_request(
@@ -1052,6 +1205,7 @@ class CodexBridge:
             reasoning_summary=reasoning_summary, verbosity=verbosity,
             review_uncommitted=uncommitted, review_base=base, review_commit=commit,
             review_title=title,
+            security_policy=security_policy,
         )
         return self._run_advanced(request)
 
@@ -1120,6 +1274,7 @@ class CodexBridge:
         after = int(since) if isinstance(since, int) or (isinstance(since, str) and since.isdigit()) else 0
         timestamp_since = since if isinstance(since, str) and not since.isdigit() else None
         last_status = None
+        replay_warning_sent = False
         while True:
             for event in self.registry.events_for(run, after_sequence=after):
                 seq = int(event.get("persistence_sequence", 0)); after = max(after, seq)
@@ -1130,6 +1285,11 @@ class CodexBridge:
                 if "Approval" in str(event_type) and not approvals: continue
                 yield event
             snapshot = self.inspect(str(run.get("bridge_run_id")))
+            if snapshot.get("recovered") and not snapshot.get("event_replay_complete") and not replay_warning_sent:
+                replay_warning_sent = True
+                yield {"type": "ReplayWarning", "bridge_run_id": run.get("bridge_run_id"),
+                       "message": "Only persisted lifecycle events are replayed; remote message deltas are unavailable.",
+                       "timestamp": snapshot.get("started_at")}
             status = str(snapshot.get("status", "UNKNOWN")).upper()
             if status != last_status:
                 last_status = status
@@ -1307,6 +1467,7 @@ class CodexBridge:
         include_raw_output: bool,
         config_policy: str | None,
         config_overrides: dict[str, Any] | None,
+        security_policy: RunSecurityPolicy | None = None,
     ) -> dict[str, Any]:
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("prompt is required")
@@ -1336,6 +1497,8 @@ class CodexBridge:
             raise ValueError("Codex CLI cannot isolate user-only configuration; use project for native layered configuration")
         if config_policy not in {item.value for item in ConfigPolicy}:
             raise ValueError("config_policy must be isolated, project or explicit")
+        security_policy = security_policy or self.default_security_policy
+        security_result = validate_run_security(security_policy, backend="exec", config_policy=config_policy, cwd=resolved_cwd)
         overrides = dict(config_overrides or {})
         supported_override_keys = {"model", "model_reasoning_effort", "model_reasoning_summary", "model_verbosity"}
         if any(key not in supported_override_keys for key in overrides):
@@ -1403,4 +1566,10 @@ class CodexBridge:
             "include_raw_output": include_raw_output,
             "config_policy": config_policy,
             "config_overrides": overrides,
+            "security_policy": security_policy.to_dict(),
+            "security_snapshot": {"project_trust": security_policy.project_trust.value,
+                                  "policy_id": security_result.policy_id,
+                                  "risk_acknowledged": security_policy.explicit_risk_acknowledgement,
+                                  "mcp_isolation_required": security_policy.require_mcp_isolation,
+                                  "decision": security_result.decision.value},
         }

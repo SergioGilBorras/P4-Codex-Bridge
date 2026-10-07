@@ -10,9 +10,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from p4_codex_bridge import ApprovalError, ApprovalHandlingPolicy, ApprovalPolicy, CodexBridge, CodexPermissions, SandboxMode
+from p4_codex_bridge import ApprovalPolicy, CodexBridge, CodexPermissions, SandboxMode
+from p4_codex_bridge.events import ApprovalError
+from p4_codex_bridge.models import ApprovalHandlingPolicy
 from p4_codex_bridge.events import EventDecodeError, EventNormalizer, EventSubscription, decode_json_line
 from p4_codex_bridge.registry import RunRegistry
+from p4_codex_bridge.security import ProjectTrust, RunSecurityPolicy
+from p4_codex_bridge.app_server_capabilities import AppServerCapabilitySet, CapabilityStatus, FEATURE_METHODS
 
 
 FAKE_APP_SERVER = r'''import json, sys, time
@@ -164,8 +168,13 @@ class FakeAppServerTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="p4-event-test-")
         self.root = Path(self.temp.name); self.cwd = self.root / "workspace"; self.cwd.mkdir()
         self.fake = self.root / "fake_codex.py"; self.fake.write_text(FAKE_APP_SERVER, encoding="utf-8")
-        self.env = patch.dict(os.environ, {"CODEX_BIN": str(self.fake)}); self.env.start()
-        self.bridge = CodexBridge(state_dir=self.root / "state", allowed_roots=(self.root,))
+        self.env = patch.dict(os.environ, {"P4_CODEX_BRIDGE_CODEX_EXECUTABLE": str(self.fake)}); self.env.start()
+        self.bridge = CodexBridge(state_dir=self.root / "state", allowed_roots=(self.root,),
+            app_server_capability_override=AppServerCapabilitySet({key: CapabilityStatus.SUPPORTED for key in FEATURE_METHODS}, "fake-schema", "v2"),
+            default_security_policy=RunSecurityPolicy(project_trust=ProjectTrust.TRUSTED,
+                allow_project_config=True, allow_agents=True, allow_skills=True,
+                allow_external_mcps=True, allow_side_effect_mcps=True,
+                explicit_risk_acknowledgement=True, policy_id="offline-fake"))
 
     def tearDown(self):
         self.env.stop(); self.temp.cleanup()

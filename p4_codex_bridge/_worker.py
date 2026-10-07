@@ -371,16 +371,12 @@ def main() -> int:
         except Exception:
             pass
         try:
-            package_root = str(Path(__file__).resolve().parent.parent)
-            env = codex_environment()
-            env["PYTHONPATH"] = os.pathsep.join(filter(None, (package_root, env.get("PYTHONPATH", ""))))
-            kwargs: dict[str, Any] = {"args": [sys.executable, "-m", "p4_codex_bridge._exec_dispatch", "--database", str(Path(args.db).resolve())],
-                "cwd": package_root, "env": env, "stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
-                "stderr": subprocess.DEVNULL, "shell": False, "close_fds": True}
-            if os.name == "nt": kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-            else: kwargs["start_new_session"] = True
-            subprocess.Popen(**kwargs)
-        except OSError:
+            # Dispatch inline after terminal state is committed. A detached
+            # one-shot dispatcher could outlive the worker and keep SQLite
+            # open while the caller tears down its state directory on Windows.
+            from ._exec_dispatch import dispatch
+            dispatch(Path(args.db).resolve())
+        except Exception:
             pass
     return 0
 

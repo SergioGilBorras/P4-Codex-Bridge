@@ -12,6 +12,8 @@ found response remains authoritative for that operation. The generated schema
 is version-specific and app-server is experimental, so validate after Codex
 upgrades. No minimum/maximum compatibility range is asserted yet.
 
-OpenAI Developer Docs MCP was not callable in this implementation turn. The
-installed CLI/schema was the primary source of truth. Session MCP visibility is
-not evidence of child-process visibility.
+Historical note: during the earlier Phase 4 audit, OpenAI Developer Docs MCP was
+not callable in that agent turn. In the 2026-10-06 Phase 7 session it was callable
+for harmless official documentation searches/fetches. This session-level result
+does not prove child-process visibility or runtime dependency; local CLI/schema
+remains authoritative for the installed version.

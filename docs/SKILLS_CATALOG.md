@@ -1,6 +1,6 @@
 # Skills catalog
 
-Snapshot of skills explicitly supplied to Codex in the **5 October 2026** task session. Count: 18. Skill availability is session-specific; use the active catalog before relying on an entry.
+HOST_SESSION_SNAPSHOT of skills supplied to Codex on **6 October 2026**. Count: 18. A diagnostic app-server `skills/list` separately returned 5 enabled `system` entries; that does not establish `codex exec` visibility. Skill availability is session-specific; use the active catalog before relying on an entry.
 
 > **If a specialized skill exists for the current task, read its instructions before improvising an implementation.**
 

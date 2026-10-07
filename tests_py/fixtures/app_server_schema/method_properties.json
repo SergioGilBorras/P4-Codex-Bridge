@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "ThreadStartRequest": {
+      "type": "object",
+      "properties": {
+        "method": {"const": "thread/start"},
+        "params": {"type": "object"}
+      }
+    },
+    "TurnStartRequest": {
+      "type": "object",
+      "properties": {
+        "method": {"enum": ["turn/start"]},
+        "params": {"type": "object", "properties": {"outputSchema": {"type": "object"}}}
+      }
+    }
+  }
+}
