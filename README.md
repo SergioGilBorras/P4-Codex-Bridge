@@ -91,6 +91,7 @@ Automated tests use fake Codex/app-server executables; they do not call Codex or
 ## Documentation
 
 - [Architecture and capability audit](docs/ARCHITECTURE.md)
+- [Installation](docs/INSTALLATION.md) and [known limitations](docs/KNOWN_LIMITATIONS.md)
 - [Python API](docs/PYTHON_API.md)
 - [Process lifecycle and Phase 2](docs/LIFECYCLE.md)
 - [Installed protocol capability matrix](docs/CAPABILITY_MATRIX.md)
@@ -105,4 +106,4 @@ Automated tests use fake Codex/app-server executables; they do not call Codex or
 - [Skills](docs/SKILLS_CATALOG.md)
 # Resource scheduling
 
-The resident app-server runtime has a persistent SQLite resource queue. It controls app-server slots and workspace access only; P4-Jira-Agent-Orchestrator continues to select and prioritize business work. The exec facade is not yet integrated with the same queue, locks or active cancellation. See [Resource Scheduler](docs/RESOURCE_SCHEDULER.md) and [Concurrency](docs/CONCURRENCY.md). `p4-codex resources` and `p4-codex limits` inspect local capacity. Automated scheduler tests use fakes and consume no Codex tokens.
+The resident app-server runtime and managed `CodexBridge.start()` exec runs share a persistent SQLite resource queue, global/backend/profile limits, workspace locks, cancellation and run observability. Direct one-shot `CodexBridge.run()` remains outside scheduling. P4-Jira-Agent-Orchestrator continues to select and prioritize business work; the bridge schedules only Codex resources. See [Resource Scheduler](docs/RESOURCE_SCHEDULER.md) and [Concurrency](docs/CONCURRENCY.md). `p4-codex resources` and `p4-codex limits` inspect local capacity. Automated scheduler tests use fakes and consume no Codex tokens.

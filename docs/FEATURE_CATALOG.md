@@ -33,6 +33,9 @@
 
 ## Phase 5 and Phase 6 runtime additions
 
+The table below is maintained as a release catalog; rows superseded by the 1.0
+software closeout reflect the current 1.0 behavior described in the notes.
+
 | Feature | Status | Notes |
 |---|---|---|
 | Resident app-server manager | PARTIAL | One owned stdio process, singleton lock, lifecycle methods; Windows daemon/proxy not used |
@@ -63,8 +66,8 @@
 | Startup recovery | PARTIAL | Existing conservative registry/scheduler recovery runs before dispatch; uncertain claimed work is not replayed |
 | Rotating operational logs | IMPLEMENTED | Bounded rotating file plus stderr; human or JSON format; prompts and environment are excluded |
 | Windows SCM service wrapper | PLANNED | Foreground operation is supported; Task Scheduler/WinSW/NSSM guidance only, no wrapper is installed |
-| Cross-process turn submission | PARTIAL | Observability/control works across processes; general thread/turn submission IPC is not exposed |
-| Retention/maintenance | PLANNED | Config field is reserved; no automatic purge or VACUUM |
+| Cross-process turn submission | IMPLEMENTED | Typed `CodexServiceClient` and CLI requests support thread creation and turn start through the daemon; the service revalidates requests. |
+| Retention/maintenance | IMPLEMENTED | Explicit `maintenance clean` applies configured retention; cleanup is not automatic at startup and does not run VACUUM. |
 | Fake resident operator demo | IMPLEMENTED | `service run --fake` plus `service demo`; fake protocol only, zero Codex calls |
 
 ## IMPLEMENTED
@@ -78,7 +81,7 @@
 - Config policies: isolated/user-ignored, native layered config, and explicit `-c` overrides. User-only config isolation is rejected as unsupported.
 - Bounded JSONL/stdout/stderr capture, worker timeout, sanitized result/error output and short-lived schema/output files.
 - Python operator CLI: run/start/ps/inspect/watch/status/stop/kill/models/version/capabilities.
-- Legacy Node stdin/stdout contract remains available.
+- The former Node stdin/stdout contract is retained only as historical documentation in `docs/CONTRACT.md`; its runtime was removed before 1.0.0 (ADR-002).
 - `CodexBridge.start_turn()` starts an ephemeral app-server thread/turn; synchronous and async streams normalize lifecycle, message and tool events. `turn.interrupt()` uses app-server `turn/interrupt`.
 - `stream_all_events()` / `astream_all_events()` multiplex all currently live turn handles owned by one `CodexBridge` instance.
 - Unknown notifications remain available as sanitized `UnknownEvent`; message deltas assemble into partial and completed text.

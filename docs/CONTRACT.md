@@ -1,6 +1,6 @@
 # Python execution contract
 
-The public Python API is the preferred interface for new integrations. The existing Node JSON contract is retained unchanged for migration compatibility; see [legacy contract notes](#legacy-node-contract).
+The public Python API is the only supported bridge interface for new integrations. This document preserves the former Node JSON contract as historical migration reference only; its JavaScript runtime and launcher were removed before 1.0.0 under [ADR-002](adr/ADR-002-python-only-runtime.md). The legacy contract below is not executable or supported by this package.
 
 ## Python input
 
@@ -55,9 +55,9 @@ Stable error codes presently emitted by the worker include `CODEX_NOT_FOUND`, `C
 
 Only PIDs recorded with creation identities in the bridge's SQLite registry can be stopped or killed. `stop` writes a bridge-owned stop request; the supervisor interrupts its Codex child and falls back to forced termination after the grace interval. `kill` terminates the registered Codex child and worker process tree immediately. Phase 1 does not claim resumable Codex sessions.
 
-## Legacy Node contract
+## Historical Node contract (not supported in 1.0)
 
-`node bin/p4-codex-bridge.js` continues to read one JSON object from stdin and emit one JSON response. Its legacy fields and exit codes remain unchanged for this phase; new Python fields such as `permissions`, `output_schema`, process IDs and `structured_output` are not supported by the JS path.
+The removed pre-1.0 JavaScript bridge accepted one JSON object on stdin and emitted one JSON response. Its fields and exit codes are recorded here for historical reference. There is no `bin/p4-codex-bridge.js` in this package; use the Python API or CLI. The legacy interface is not supported by 1.0.0.
 
 ## Credential and output handling
 

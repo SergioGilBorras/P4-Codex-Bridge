@@ -11,7 +11,7 @@ operations remain experimental where they depend on evolving app-server RPCs.
 | Component | Classification | Consumer guidance |
 |---|---|---|
 | `CodexBridge` | STABLE for typed exec operations, managed scheduled `start`, discovery, inspection and cancellation; app-server-specific methods remain experimental | Preferred in-process facade. |
-| `CodexServiceClient` | STABLE for health/status, typed submit/create/start, wait, inspect/watch/cancel and approval operations | Preferred cross-process consumer boundary. |
+| `CodexServiceClient` | STABLE for availability check, typed submit/create/start, command wait, inspect/watch and cancel | Preferred cross-process submission and run-observation boundary. Service health/status and approval resolution are CLI operations in 1.0. |
 | `CodexRuntimeManager` | INTERNAL | Runtime implementation; not a consumer import path. |
 | Runtime limits | EXPERIMENTAL service TOML configuration | SQLite scheduler types are internal and not exported at package root. |
 | scheduler / `ResourceScheduler` | INTERNAL | SQLite queue implementation; do not import it from consumers. |
@@ -80,7 +80,7 @@ The intended stable `CodexBridge` contract is `get_version`,
 `resolve_run_reference`, `inspect`, `watch`, `stop`, `kill`, `cancel`, and
 `read_result`. Model/config, MCP and skill diagnostics are best-effort
 observations, not a guarantee of child effectiveness. `resume`, `fork`, and
-`resume`, `fork`, and `review` are separately gated exec operations and remain
+`review` are separately gated exec operations and remain
 EXPERIMENTAL until verified against the supported CLI range. Model/config,
 MCP, skill and capability diagnostics; `format_run_announcement`; `awatch`;
 and app-server stream/approval methods are EXPERIMENTAL.
