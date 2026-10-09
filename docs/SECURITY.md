@@ -1,6 +1,6 @@
 # Security boundary for Codex capabilities
 
-## Release 1.0 guarantees and limits
+## Current guarantees and limits
 
 | Area | Classification | Guarantee / limitation |
 |---|---|---|
@@ -14,21 +14,14 @@
 | Local IPC | BEST_EFFORT | SQLite command/control channel is local state-directory access. Filesystem ACLs are inherited and not hardened by the bridge. |
 | Multi-user isolation | NOT_GUARANTEED | State directory, journal and local control are intended for a single OS user/trust boundary. Do not share across mutually untrusted users. |
 
-The unavailable per-run MCP filter is classified for 1.0 as
-`KNOWN_LIMITATION`, `NOT_SUPPORTED_BY_CODEX`, and `SECURITY_BOUNDARY_DOCUMENTED`,
-not as an unconditional release blocker. This is valid only while every run
-submission path is gated and unknown MCP state remains fail-closed. Tests cover
-direct exec, managed exec, runtime-manager thread creation, typed service input
-and daemon-side revalidation. Any future path that bypasses this validation
-reopens the release blocker.
+The current per-run MCP isolation limitation remains security-significant. All supported submission paths must enforce the typed security gate; a new path without that gate is a security regression.
 
-## Verified limits
+## Runtime-dependent limits
 
-- Codex CLI 0.160.1 supports `--ignore-user-config`, but the observed CLI does not expose a per-run allow/deny list for MCP servers or individual tools.
-- A read-only OS sandbox does not establish that an external MCP tool is read-only.
-- The short-lived diagnostic app-server in this environment advertised `codex_apps` with Atlassian writes/transitions, destructive operations, plugin changes and Sites deploy operations. These descriptors were not invoked.
-- Serena and PyCharm were enabled in CLI config, but their app-server diagnostic handshake timed out and announced no tools. A host-session tool schema does not change that child result.
-- No bridge run was made in this phase, so none of the above is classified `EFFECTIVE_FOR_RUN`.
+- No verified per-run MCP/tool allowlist or empty-MCP receipt is exposed by the supported Codex interface.
+- A read-only filesystem sandbox does not prove that external MCP tools are read-only.
+- A diagnostic app-server's tool/skills inventory does not establish access for a separate exec run.
+- Capability status must be scoped to the process and run being observed.
 
 ## Required posture
 
@@ -50,9 +43,9 @@ risk under a trusted project with explicit acknowledgement.
 6. Because Codex has no verified per-run MCP filter, `require_mcp_isolation`
    rejects before launch. A TRUSTED project and explicit risk acknowledgement
    can opt into inherited external MCP risk, with a warning; the bridge still
-   cannot deny individual external tools. This is a release limitation, not an
+   cannot deny individual external tools. This is a current limitation, not an
    isolation guarantee.
-7. Never test Apps write/delete/deploy/plugin mutation tools for discovery. For OpenAI Docs, one harmless host-session search was sufficient to confirm host callability; child callability remains unknown.
+7. Never invoke external write/delete/deploy/plugin actions as a capability-discovery probe.
 
 ## Secret handling
 
@@ -62,7 +55,7 @@ See [MCP discovery](MCP.md), [skills](SKILLS.md), [AGENTS behavior](AGENTS_BEHAV
 
 ## Git repository context option
 
-The 1.1 Python API offers `skip_git_repo_check=True` for direct and managed
+The current Python API offers `skip_git_repo_check=True` for direct and managed
 `codex exec` only. It omits Codex's Git-context/repository check; it does not
 disable Codex's sandbox or relax bridge `cwd`/`allowed_roots` validation,
 permissions, approval policy, or MCP security policy. It defaults to false and

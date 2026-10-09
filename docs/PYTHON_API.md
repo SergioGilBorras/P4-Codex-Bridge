@@ -11,13 +11,12 @@ operations remain experimental where they depend on evolving app-server RPCs.
 | Component | Classification | Consumer guidance |
 |---|---|---|
 | `CodexBridge` | STABLE for typed exec operations, managed scheduled `start`, discovery, inspection and cancellation; app-server-specific methods remain experimental | Preferred in-process facade. |
-| `CodexServiceClient` | STABLE for availability check, typed submit/create/start, command wait, inspect/watch and cancel | Preferred cross-process submission and run-observation boundary. Service health/status and approval resolution are CLI operations in 1.0. |
+| `CodexServiceClient` | STABLE for availability check, typed submit/create/start, command wait, inspect/watch and cancel | Preferred cross-process submission and run-observation boundary. Service health/status and approval resolution are CLI operations in 1.1. |
 | `CodexRuntimeManager` | INTERNAL | Runtime implementation; not a consumer import path. |
 | Runtime limits | EXPERIMENTAL service TOML configuration | SQLite scheduler types are internal and not exported at package root. |
 | scheduler / `ResourceScheduler` | INTERNAL | SQLite queue implementation; do not import it from consumers. |
 | registry / SQLite schema | INTERNAL | Persistence implementation can migrate without consumer changes. |
 | app-server transport and process helpers | INTERNAL | Protocol and OS process details are not public contracts. |
-| JavaScript runtime | REMOVED | Python is the sole runtime; no in-repository consumer required the duplicate implementation. |
 
 The package root has an explicit export allowlist. Runtime manager, service
 implementation, scheduler, registry, SQLite, transport, canonicalization and
@@ -29,8 +28,8 @@ being importable does not make them stable.
 uses the explicitly named experimental `AppServerCapabilityStatus`; the two
 are separate types. `AppServerCapabilitySet`, `ApprovalRequest`, event models,
 `CodexTurn`, and `AppServerApprovalPolicy` are exported for advanced protocol
-users but remain EXPERIMENTAL. See [the 1.0 contract](CONTRACT_1_0.md) for the
-exact stable and experimental root-export lists.
+users but remain EXPERIMENTAL. The current public call contract is summarized in [execution contract](CONTRACT.md) and
+covered by `tests_py/test_public_api.py`.
 
 `CodexVersionInfo`, `CapabilitySet`, `CompatibilityResult`,
 `CompatibilityStatus`, and `assess_compatibility` are stable diagnostic value
@@ -102,7 +101,7 @@ while retaining its thread when supported. `stop` requests cooperative
 termination of a managed exec run. `kill` is the identity-checked OS
 process-tree fallback. These operations are not aliases.
 
-### Skip the Git repository check (1.1 API addition)
+### Skip the Git repository check
 
 `CodexBridge.run()` and `CodexBridge.start()` accept the strictly typed
 `skip_git_repo_check: bool = False` parameter. The default leaves the Codex
@@ -161,9 +160,7 @@ must exist and be allowed by bridge path policy.
 
 The option is intentionally limited to `run()` and managed `start()`. It is not
 forwarded through `resume()`, `fork()`, `review()`, `CodexServiceClient`, or the
-CLI/service submit payloads in this API evolution. The frozen historical
-[`CONTRACT_1_0`](CONTRACT_1_0.md) signature remains unchanged; see the
-[`CONTRACT_1_1`](CONTRACT_1_1.md) addendum.
+CLI/service submit payloads in this API evolution. See the [current execution contract](CONTRACT.md) for supported signatures.
 
 ### Errors and resource scheduling boundary
 
@@ -176,7 +173,7 @@ internal persistent scheduler. Error normalization across all legacy facade
 methods is still PARTIAL; some methods preserve `ValueError`, `KeyError`, or
 backend-specific failures for compatibility.
 
-## Resident runtime (experimental, Phase 5/6)
+## Resident runtime (experimental)
 
 `CodexRuntimeManager(cwd=..., database_path=...)` owns one app-server child.
 Call `start()`, `health()`, `create_thread(...)`, `start_turn(thread_id,
@@ -212,7 +209,7 @@ independently polls persisted events. See [live observability](LIVE_OBSERVABILIT
 
 ## Install / import
 
-The package has no third-party runtime dependency beyond the Python 3.10 TOML compatibility dependency. Release version `1.0.0` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`. Install this repository into the caller's Python environment with `pip install -e .`, or install a built wheel. Codex CLI remains an external installed prerequisite. Python >=3.10 is declared.
+The package has no third-party runtime dependency beyond the Python 3.10 TOML compatibility dependency. Current source version `1.1.0` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`. Install this repository into the caller's Python environment with `pip install -e .`, or install a built wheel. Codex CLI remains an external installed prerequisite. Python >=3.10 is declared.
 
 ```python
 from p4_codex_bridge import (
@@ -260,7 +257,7 @@ print(result.content)
 
 `resume()` and `fork()` require a specific stored session id and `confirm_inherited_permissions=True`: local CLI help exposes no replacement sandbox/approval flags for these commands, so stored session policy remains in force. The supplied `cwd` is validated and used as the subprocess launch cwd, but local help has no `-C` switch for resume/fork; it does not prove the stored session working root changed.
 
-### App-server turns and events (Phase 3)
+### App-server turns and events
 
 ```python
 from p4_codex_bridge import (

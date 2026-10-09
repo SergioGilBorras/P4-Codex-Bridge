@@ -1,64 +1,54 @@
-# Python execution contract
+# Current Python execution contract (1.1.0)
 
-The public Python API is the only supported bridge interface for new integrations. This document preserves the former Node JSON contract as historical migration reference only; its JavaScript runtime and launcher were removed before 1.0.0 under [ADR-002](adr/ADR-002-python-only-runtime.md). The legacy contract below is not executable or supported by this package.
+The supported consumer boundary is the Python package-root `p4_codex_bridge` API and the documented `p4-codex` operator CLI. Internal scheduler, worker, SQLite schema and app-server transports are not stable public imports.
 
-## Python input
+## Direct execution
 
-```python
-from p4_codex_bridge import CodexBridge, CodexPermissions, SandboxMode, ApprovalPolicy
+    from p4_codex_bridge import (
+        CodexBridge, CodexPermissions, SandboxMode, ApprovalPolicy,
+    )
 
-bridge = CodexBridge(allowed_roots=[r"F:\ProyectosPYCHARM\PythonProject"])
-result = bridge.run(
-    "Analyze the selected code",
-    cwd=r"F:\ProyectosPYCHARM\PythonProject\P4",
-    profile="analysis",
-    model=None,
-    timeout_seconds=300,
-    permissions=CodexPermissions(SandboxMode.READ_ONLY, ApprovalPolicy.NEVER),
-)
-```
+    bridge = CodexBridge(allowed_roots=[r"C:\work"])
+    result = bridge.run(
+        "Summarize the provided text",
+        cwd=r"C:\work\scratch",  # must exist; can be empty
+        profile="analysis",
+        timeout_seconds=120,
+        permissions=CodexPermissions(SandboxMode.READ_ONLY, ApprovalPolicy.NEVER),
+        skip_git_repo_check=True,
+        capture_last_message=True,
+    )
 
-`start()` accepts the same arguments and returns `BridgeRun`; use `read_result(run_id)` to consume the eventual result once. `run()` waits and consumes that result automatically.
+This call may still be refused by `RunSecurityPolicy` if external MCP risk cannot be bounded or explicitly acknowledged. No filesystem sandbox alone guarantees that inherited MCP tools are read-only.
 
-## Installed Codex CLI mapping
+- `prompt`: nonempty text sent on stdin; not inserted into shell arguments.
+- `cwd`: required absolute existing directory, validated against `allowed_roots` when provided.
+- `model`: optional requested model identifier; availability is CLI/account-dependent.
+- `profile`: `analysis` is the implemented named exec profile.
+- `timeout_seconds`: validated positive bounded duration; the bridge supervises the child.
+- `permissions`: typed sandbox/approval and optional validated additional roots/network settings.
+- `config_policy`: `isolated`, `project`, or `explicit`; explicit config overrides are allowlisted and validated.
+- `output_schema` and `capture_last_message`: use CLI-supported bridge-owned temporary files.
+- `skip_git_repo_check: bool = False`: opt-in on `run()` and managed `start()` only. The CLI must advertise the option or the bridge fails before execution/submission.
 
-Reference runtime: `codex-cli 0.160.1`, Node `v22.15.0`. The Python one-shot worker constructs this argument sequence with an array and `shell=False`:
+The Codex process receives a shell-free argument vector. With the opt-in flag, the `exec` subcommand includes `--skip-git-repo-check` exactly once. `--json` emits events for normalized parsing; `-` reads prompt text through stdin.
 
-```text
-codex --ask-for-approval never exec --json --ephemeral --sandbox read-only -C <cwd> --ignore-user-config [--model <model>] [-c model_reasoning_effort=<effort>] [--output-schema <temporary-file>] -
-```
+## Managed execution
 
-`-` reads prompt text from stdin. `--json` emits JSONL; the bridge extracts `item.completed` with `agent_message`. `--output-schema` is used only if a schema is provided. `--output-last-message` is captured in a private bridge-owned temporary file. The Bridge also wraps the installed `exec resume`, `exec fork`, and `exec review` commands; resume/fork keep stored session policy and are separate from app-server thread resume/fork. Review targets are limited to `--uncommitted`, `--base`, or `--commit`. Verify flags after a Codex update. Sources: [Codex CLI docs](https://developers.openai.com/codex/cli/) and local `codex exec --help` plus subcommand help.
+`CodexBridge.start()` returns `BridgeRun` and schedules an exec job in SQLite. Use `status()`/`watch()`/`inspect()` and `read_result()` to observe/consume it. This differs from synchronous `run()`, which bypasses the shared resource queue.
 
-| Option | Rule / installed capability |
-|---|---|
-| `prompt` | Nonempty UTF-8 text; written to child stdin, never shell-interpolated or persisted. |
-| `cwd` | Required absolute existing directory, canonicalized; checked against `allowed_roots` if set. |
-| `profile` | `analysis` implemented. Other named profiles are explicitly planned and rejected. |
-| `timeout_seconds` | Default 300, maximum 3600; timeout kills the managed process tree and records `TIMED_OUT`. |
-| `model` | Optional model id passed as a separate CLI argument. `list_models()` discovers the current catalog. |
-| `permissions` | Sandbox modes verified in `codex exec --help`; approval policy options are exposed in root `codex --help` and are placed before the `exec` subcommand. Defaults are read-only / never. Full access requires explicit `on-request`. |
-| `reasoning_effort` | Passed as supported Codex config `model_reasoning_effort`; consult the selected model's advertised `supportedReasoningEfforts`. |
-| `output_schema` | Optional JSON object, written to a short-lived schema file and passed using verified `--output-schema`; file is removed after execution. |
-| `config_policy` | `isolated`, `project`, or `explicit`. User-only separation is unsupported by the installed CLI. |
-| `config_overrides` | Only with `explicit`; keys and scalar values are validated and sent as individual `-c` arguments. |
+**Data retention:** A pending managed job stores a bounded prompt payload in the local SQLite scheduler until claimed or cancelled. Registry records retain sanitized run metadata; transient result files may hold redacted model output until consumed or cleaned. Do not assume all paths are non-persistent.
 
-## Python result
+## Other operations
 
-`run()` returns `RunResult`: `ok`, `bridge_run_id`, `exit_code`, final `content`, sanitized `stderr`, optional `structured_output`, normalized `error`, and `duration_ms`. `start()`/`list_runs()`/`status()` return process metadata without generated content. `read_result()` consumes and deletes the sanitized result file, if present.
+`resume()`, `fork()` and `review()` have separate typed exec contracts. Resumed/forked sessions inherit their stored permissions and require acknowledgement. The Git-check bypass option is **not** available on these operations, the typed service client, or JSON CLI submission.
 
-Stable error codes presently emitted by the worker include `CODEX_NOT_FOUND`, `CODEX_AUTH_REQUIRED`, `CODEX_TIMEOUT`, `CODEX_OUTPUT_LIMIT`, `CODEX_EXIT_NONZERO`, `CODEX_EMPTY_RESPONSE`, `STRUCTURED_OUTPUT_INVALID`, and `CODEX_STOPPED`. Request validation raises `ValueError`; missing run IDs raise `KeyError`.
+Resident app-server operations are experimental and must be capability-gated at runtime. Their service and approval semantics are detailed separately.
 
-## Process lifecycle and exit codes
+## Results and failures
 
-`p4-codex run` exits 0 only when Codex returned a final message successfully, 1 on a bridge/Codex error. `start`, `ps`, `status`, `stop`, `kill`, `models`, `version`, and `capabilities` emit JSON to stdout; operational errors emit sanitized JSON and a sanitized diagnostic to stderr.
+`RunResult` includes `ok`, `bridge_run_id`, `exit_code`, `content`, sanitized `stderr`, optional structured output, `error` and `duration_ms`. `RunResult.ok=False` is not a completed inference; inspect the structured error category/code when available.
 
-Only PIDs recorded with creation identities in the bridge's SQLite registry can be stopped or killed. `stop` writes a bridge-owned stop request; the supervisor interrupts its Codex child and falls back to forced termination after the grace interval. `kill` terminates the registered Codex child and worker process tree immediately. Phase 1 does not claim resumable Codex sessions.
+Common worker error codes include `CODEX_NOT_FOUND`, `CODEX_AUTH_REQUIRED`, `CODEX_TIMEOUT`, `CODEX_EXIT_NONZERO`, `CODEX_EMPTY_RESPONSE` and `STRUCTURED_OUTPUT_INVALID`. Validation and capability failures can raise typed Python exceptions instead of returning a `RunResult`. CLI command exit behavior is documented in [CLI](CLI.md).
 
-## Historical Node contract (not supported in 1.0)
-
-The removed pre-1.0 JavaScript bridge accepted one JSON object on stdin and emitted one JSON response. Its fields and exit codes are recorded here for historical reference. There is no `bin/p4-codex-bridge.js` in this package; use the Python API or CLI. The legacy interface is not supported by 1.0.0.
-
-## Credential and output handling
-
-The child environment is allowlisted and omits API-key variables. The bridge never reads Codex auth files, tokens, cookies or the full environment. User-visible result text and stderr are redacted before writing the short-lived result file. That redaction reduces accidental disclosure; consumers must still handle generated text as sensitive data. Prompts, auth, and environment are not stored in the run database.
+For exact signatures and experimental/stable method distinctions see [Python API](PYTHON_API.md). For risk boundaries see [security](SECURITY.md).

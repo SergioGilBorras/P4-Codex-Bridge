@@ -21,7 +21,7 @@ Approval handling is separately configurable: `MANUAL` is default; `AUTO_REJECT`
 - `explicit`: layered settings plus validated `-c` overrides.
 - `user`: rejected because the installed CLI cannot select only user config.
 
-## Phase 4 execution controls
+## Execution controls
 
 `CodexPermissions` optionally accepts `writable_roots` and `network_access`. Exec adds validated writable roots using `--add-dir`; workspace-write network access is sent as the schema-backed `sandbox_workspace_write.network_access` config setting and defaults to false. These do not filter MCP/network tools. `danger-full-access` has no independent network setting in the observed exec contract, requires explicit `on-request`, and remains non-default.
 
@@ -33,6 +33,6 @@ The diagnostic config/MCP/skills methods launch a separate app-server child at t
 
 ### MCP policy status
 
-The desired posture is analysis: no external side-effect MCPs; planning: read-oriented; implementation: explicit opt-in; validation: minimum required. The installed `exec` interface does not expose a per-run MCP/tool allowlist, and project config may still apply under `isolated`. Therefore this posture is a **policy requirement, not yet fully enforceable**. Do not use this bridge with an untrusted project MCP configuration until a version-supported deny/allow mechanism is implemented and tested. Codex Apps and TUI tools visible in the development host are not assumed to be child-visible.
+The proposed future posture is analysis: no external side-effect MCPs; planning: read-oriented; implementation: explicit opt-in; validation: minimum required. The installed `exec` interface does not expose a per-run MCP/tool allowlist, and project config may still apply under `isolated`. Therefore this posture is a **policy requirement, not yet fully enforceable**. Do not use this bridge with an untrusted project MCP configuration until a version-supported deny/allow mechanism is implemented and tested. Codex Apps and TUI tools visible in the development host are not assumed to be child-visible.
 
 See [Python API](PYTHON_API.md), [architecture](ARCHITECTURE.md), and [approval behavior](APPROVALS.md).

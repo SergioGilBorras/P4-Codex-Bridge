@@ -39,7 +39,7 @@ write the same registry/journal when given the same state directory. Use
 SQLite IPC is a same-user/local-machine convenience, not strong multi-user
 authentication; keep the state directory in the user's private local profile.
 
-## Control-channel decision for 1.0
+## Local control channel
 
 SQLite is suitable for same-machine status/control and polling the persisted run
 journal. Runtime commands use transactional claims, idempotency keys, bounded
@@ -56,7 +56,7 @@ reuses the existing scheduler, limits, workspace locks and resource policies.
 The command table is a request/ack channel, not a second scheduler. It preserves
 the pending-payload policy and clears payload content atomically at claim,
 retaining only a hash for idempotency. Its cross-process fake-daemon flow is
-covered offline. Real Codex service execution remains untested.
+covered offline. Live Codex service operation is environment-specific; offline fake-daemon tests do not establish account entitlement or run-level MCP isolation.
 never accept arbitrary Python/CLI commands. Do not add HTTP as a shortcut.
 
 `ps`, `inspect`, `watch`, `resources`, health and metrics remain direct
@@ -103,8 +103,8 @@ pending cleanup are available through `health --json`, `doctor --json` and
 - App-server is experimental; startup handshake failure prevents dispatcher
   startup.
 - Compatibility APIs classify support from observed capabilities and report
-  un-audited newer versions with limitations; this is not a broad guarantee
-  against protocol changes.
+  unverified installed Codex versions with limitations; a version number does not
+  guarantee compatibility with a changing app-server protocol.
 - Service command requests left CLAIMED at crash are failed as outcome unknown
   and are never replayed automatically.
 - Service restart and stop are tested with a fake protocol, not installed as a
