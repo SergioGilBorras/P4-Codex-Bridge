@@ -26,7 +26,7 @@ paths and effective limits but no environment or authentication material.
 Environment variables in TOML paths use Windows `%NAME%` / platform-native
 expansion.
 
-The 1.0 configuration has no `config_version` key. TOML is a single strict
+The current configuration has no `config_version` key. TOML is a single strict
 schema: unknown sections/keys fail closed. A future incompatible schema change
 must provide an explicit migration or a separately named config format; it
 must not silently reinterpret existing fields. Config may select an executable
@@ -45,7 +45,7 @@ limits and profile limits use the exact `RuntimeLimits` names in
 `p4-codex.example.toml`; `[security]` and per-run MCP filter fields are not
 accepted because the CLI does not expose verified per-run MCP isolation.
 
-Frozen TOML keys:
+Supported TOML keys:
 
 | Table | Keys |
 |---|---|
