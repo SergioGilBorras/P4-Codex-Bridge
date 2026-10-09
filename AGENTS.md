@@ -8,14 +8,13 @@ This repository is shared infrastructure for invoking Codex from P4. Planned con
 
 - Before complex work, inspect live tools/MCP and skills. **Tool discovery is part of the task: before solving a complex problem manually, check whether Serena, PyCharm, a skill or an MCP offers a reliable specialized operation.** Read relevant skill instructions before implementing manually.
 - Use the cheapest reliable source of truth. Prefer Serena/PyCharm structured symbol and inspection results when they target this checkout. Use shell for reproducible Codex CLI, Python, tests and Git operations.
-- Keep `docs/TOOLS_CATALOG.md` and `docs/SKILLS_CATALOG.md` as environment snapshots; availability changes by session. `docs/ARCHITECTURE.md` records the audited Codex CLI/SDK surface for the installed reference version.
+- Keep `docs/TOOLS_CATALOG.md` and `docs/SKILLS_CATALOG.md` as dynamic discovery guidance, not fixed session inventories. `docs/ARCHITECTURE.md` describes the current implementation; verify runtime capabilities against the installed Codex CLI/schema.
 - **OPENAI / CODEX SOURCE OF TRUTH:** for Codex CLI/exec/app-server, official SDKs, MCP, configuration, models, approvals, sandbox and protocol schemas, use this order: (1) installed CLI/schema when the installed version matters, (2) OpenAI Developer Docs MCP, (3) installed official source/docs, (4) official OpenAI web docs if needed. Never invent flags, fields, methods or capabilities. If official docs differ from the installed version, record the difference, follow the locally verified behavior and do not mark a capability IMPLEMENTED until verified locally. The Developer Docs MCP is a Codex development tool, not a P4-Codex-Bridge runtime dependency.
 - Track MCP `SESSION_VISIBLE`, `CONFIGURED`, `ENABLED`, `CALLABLE`, `CHILD_VISIBLE` and `EFFECTIVE_FOR_RUN` separately; use unknown when evidence is missing. Profiles must deny external/destructive integrations by default and allow them only through verified, explicit policy.
 
 ## Implementation strategy
 
 - Python is the sole canonical runtime and public API. Do not reintroduce a duplicate JavaScript Codex client or runtime.
-- Python is the only in-repository runtime; the JS implementation was removed under ADR-002. The CLI and `CodexServiceClient` are the process boundaries; do not add a second protocol client in another language.
 - `codex exec` supports direct one-shot `run()` and managed/scheduled `start()`. The app-server runtime manager is resident and experimental; thread/turn state is distinct from exec runs. Schema preflight must fail closed for unknown required capabilities.
 - No consumer integration until separately requested. Do not remove `P4-Planning-Agent/scripts/js` sources as part of bridge work.
 - Profiles are configuration, not P4 business logic. Only `analysis` is implemented for one-shot `exec`; app-server turns accept explicit permissions. Planned profiles must fail closed rather than silently run with guessed policy.
@@ -29,7 +28,7 @@ This repository is shared infrastructure for invoking Codex from P4. Planned con
 - Use only official Codex ChatGPT login. Never require/pass `OPENAI_API_KEY`; never read Codex auth/token/cookie files or print environment variables.
 - Allowlist child environment, bound input/output and timeout, redact stdout-derived result/stderr, and clean temporary schema/result files. Never manage a Codex PID unless its bridge registry record and process creation identity match.
 - stdout for Python CLI is JSON only; technical diagnostics on stderr must be sanitized. Tests use fake Codex by default. Never run Jira or E2E as tests.
-- Phase 1 result files contain sanitized generated output until consumed by `read_result()`; database rows must not contain prompts, credentials or environment.
+- Result files can contain sanitized generated output until consumed by `read_result()`. Managed pending jobs can store bounded prompt payloads in SQLite until claim/cancellation; registry metadata must not contain credentials or environment values.
 - Persist only sanitized lifecycle and approval state by default; do not persist message deltas/tool payloads. Unknown app-server requests must fail closed, never be accepted by a generic handler.
 
 ## Tests and validation
@@ -40,7 +39,7 @@ This repository is shared infrastructure for invoking Codex from P4. Planned con
 
 ## Git
 
-Review `git status` before broad edits and `git diff` before commit. No push, remotes, history rewrites, or commits unless explicitly requested. If sandbox blocks `.git`, request elevation; do not alter ACLs or global safe-directory configuration.
+Review `git status` before broad edits and `git diff` before commit. No push, remotes, history rewrites, or commits unless explicitly requested. If a sandbox blocks `.git`, report the restriction and use an authorized normal-user environment; do not change ACLs or global safe-directory configuration.
 
 ## References
 

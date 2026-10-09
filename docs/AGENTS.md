@@ -9,3 +9,5 @@
 
 - Presenta únicamente funciones implementadas, limitaciones vigentes y el roadmap; evita narrativas de fases, recuentos de tests obsoletos e inventarios de una sesión anterior en páginas activas.
 - Conserva referencias versionadas de contratos por compatibilidad, pero no las utilices como descripción de la API actual.
+
+- Este repositorio está en pruebas internas sin clientes externos; describe solo contratos vigentes y el roadmap. No mantengas documentación de APIs obsoletas, fases anteriores, ADRs retiradas o migraciones sin una necesidad explícita.

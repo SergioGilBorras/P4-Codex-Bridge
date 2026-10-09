@@ -160,7 +160,7 @@ must exist and be allowed by bridge path policy.
 
 The option is intentionally limited to `run()` and managed `start()`. It is not
 forwarded through `resume()`, `fork()`, `review()`, `CodexServiceClient`, or the
-CLI/service submit payloads in this API evolution. See the [current execution contract](CONTRACT.md) for supported signatures.
+CLI/service submit payloads in the current implementation. See the [current execution contract](CONTRACT.md) for supported signatures.
 
 ### Errors and resource scheduling boundary
 
@@ -169,7 +169,7 @@ The package defines `BridgeError`, `ConfigurationError`,
 `QueueFullError`, `ResourceUnavailableError`,
 `RunNotFoundError`, `RunStateError`, `BackendError`, `AuthenticationError`,
 `ProtocolError`, and `BridgeTimeoutError`. `QueueFullError` is raised by the
-internal persistent scheduler. Error normalization across all legacy facade
+internal persistent scheduler. Error normalization across all facade
 methods is still PARTIAL; some methods preserve `ValueError`, `KeyError`, or
 backend-specific failures for compatibility.
 
@@ -348,5 +348,5 @@ do not spawn it. Optional idempotency keys prevent duplicate command rows.
 
 The client also exposes `inspect(run_id)`, `cancel(run_id)`, and read-only
 `watch(run_id)`/`awatch(run_id)` helpers over the shared journal. These typed
-request/result classes are part of the frozen consumer boundary. Do not import
+request/result classes are part of the current public consumer interface. Do not import
 service database/scheduler internals from consumers.
