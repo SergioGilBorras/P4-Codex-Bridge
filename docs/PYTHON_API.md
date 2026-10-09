@@ -3,7 +3,7 @@
 ## Public surface and stability
 
 Consumers should import contracts only from `p4_codex_bridge`. Its explicit
-package-root allowlist is the stable 1.0 boundary. `CodexBridge` is the
+package-root allowlist remains the stable public boundary in 1.1. `CodexBridge` is the
 in-process facade; `CodexServiceClient` is the stable boundary for a separate
 process submitting work to the resident service. Protocol-specific lifecycle
 operations remain experimental where they depend on evolving app-server RPCs.
@@ -59,9 +59,11 @@ cancel entry point; active app-server cancellation is delivered to the owning
 runtime manager through the local SQLite control-request table.
 `run(prompt, *, cwd, profile, model, timeout_seconds, permissions,
 reasoning_effort, reasoning_summary, verbosity, output_schema,
-capture_last_message, include_raw_output, config_policy, config_overrides,
-metadata, announce_run, security_policy)` is closed and rejects unknown
-keywords. Stable APIs are synchronous; `watch` is a synchronous iterator.
+skip_git_repo_check=False, capture_last_message, include_raw_output,
+config_policy, config_overrides, metadata, announce_run, security_policy)` is
+closed and rejects unknown keywords. `start()` accepts the same
+`skip_git_repo_check=False` option for managed/scheduled exec. Stable APIs are
+synchronous; `watch` is a synchronous iterator.
 Async `awatch`/event streaming and app-server lifecycle APIs are experimental.
 `CodexBridge.recover_exec_runs()` reconciles owned worker identities and accepts
 only a structurally valid result file matching the bridge run ID. It marks
@@ -99,6 +101,69 @@ termination for active work. `interrupt` asks an active app-server turn to stop
 while retaining its thread when supported. `stop` requests cooperative
 termination of a managed exec run. `kill` is the identity-checked OS
 process-tree fallback. These operations are not aliases.
+
+### Skip the Git repository check (1.1 API addition)
+
+`CodexBridge.run()` and `CodexBridge.start()` accept the strictly typed
+`skip_git_repo_check: bool = False` parameter. The default leaves the Codex
+command unchanged. When true, the bridge checks the installed
+`codex exec --help` output and adds `--skip-git-repo-check` exactly once to the
+`codex exec` argument vector. If the installed CLI does not advertise the flag,
+the call raises `CapabilityUnavailableError` before launching or queueing work.
+
+```python
+from pathlib import Path
+from p4_codex_bridge import CodexBridge
+
+bridge = CodexBridge(allowed_roots=[r"C:\P4"])
+workspace = Path(r"C:\P4\existing-scratch-directory")  # must already exist
+allowed_root = Path(r"C:\P4")
+
+# Existing Git repository: the default check remains enabled.
+result = bridge.run("Inspect the project", cwd=r"C:\P4\project")
+
+# Existing directory without .git, including an empty temporary directory.
+result = bridge.run(
+    "List the available files",
+    cwd=workspace,
+    skip_git_repo_check=True,
+)
+
+# Empty temporary directory: place it inside an allowed root; TemporaryDirectory
+# creates the existing cwd for the duration of the call.
+from tempfile import TemporaryDirectory
+with TemporaryDirectory(prefix="codex-work-", dir=allowed_root) as temporary_cwd:
+    result = bridge.run(
+        "Inspect the empty workspace",
+        cwd=temporary_cwd,
+        skip_git_repo_check=True,
+    )
+```
+
+No new directory or artificial Git repository is required. The bridge still
+requires an existing `cwd` permitted by `allowed_roots`. The option only skips
+Codex's Git-context check; it does not change `RunSecurityPolicy`, sandbox,
+approval policy, MCP policy, authentication, or path validation. The caller must
+choose it explicitly because Codex receives less repository context.
+
+Check availability without starting an inference:
+
+```python
+if not bridge.get_capabilities()["exec"]["skip_git_repo_check"]:
+    raise RuntimeError("Installed Codex CLI does not support this option")
+```
+
+If the option is unavailable, `run()` and `start()` raise
+`CapabilityUnavailableError`; they do not retry without the flag. Catch that
+error or check the capability field above before submitting. A pre-existing
+directory outside Git works the same way as the temporary example; it still
+must exist and be allowed by bridge path policy.
+
+The option is intentionally limited to `run()` and managed `start()`. It is not
+forwarded through `resume()`, `fork()`, `review()`, `CodexServiceClient`, or the
+CLI/service submit payloads in this API evolution. The frozen historical
+[`CONTRACT_1_0`](CONTRACT_1_0.md) signature remains unchanged; see the
+[`CONTRACT_1_1`](CONTRACT_1_1.md) addendum.
 
 ### Errors and resource scheduling boundary
 

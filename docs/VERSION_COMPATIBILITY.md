@@ -3,7 +3,18 @@
 | Codex CLI | Local observations | Runtime status |
 |---|---|---|
 | 0.160.0 (audit baseline) | app-server experimental; generated local v2 schema includes `thread/start`, `thread/resume`, `thread/turns/list`, `turn/start`, `turn/interrupt`; daemon/proxy help is platform-oriented and proxy documents a socket path | Historical audit baseline; bridge support is tracked in the capability matrix |
-| 0.160.1 (current local check, 2026-10-06) | `codex --version`, CLI help and generated local app-server schema checked; app-server remains experimental | Runtime manager uses `thread/start` and `turn/start`; app-server thread recovery/resume is not exposed by the bridge |
+| 0.160.1 (current local check) | `codex --version`, CLI help and generated local app-server schema checked; `codex exec --help` advertises `--skip-git-repo-check`; app-server remains experimental | Runtime manager uses `thread/start` and `turn/start`; app-server thread recovery/resume is not exposed by the bridge |
+
+P4-Codex-Bridge 1.1 adds the optional Python `skip_git_repo_check` argument to
+`CodexBridge.run()` and managed `start()`. Support is detected from the
+installed `codex exec --help` output, not inferred from the Codex version
+number. `CodexBridge.get_capabilities()["exec"]["skip_git_repo_check"]` reports
+the detected boolean, and
+`CodexBridge.get_capabilities()["exec"]["skip_git_repo_check_capability"]`
+includes its source and status. False remains compatible with older CLIs; true fails with
+`CapabilityUnavailableError` unless the installed CLI advertises the exact flag.
+This setting is not passed by resume/fork/review or the service-client/CLI
+submission APIs.
 
 The bridge records the server's `initialize` protocol version and `serverInfo`.
 It does not infer support for a method from a version string. Capability gates

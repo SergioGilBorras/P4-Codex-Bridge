@@ -19,7 +19,8 @@ were not changed.
 
 ## Focused coverage
 
-- `test_bridge.py`, `test_exec_advanced.py`: direct and managed exec, resume,
+- `test_bridge.py`, `test_exec_advanced.py`: direct and managed exec, typed
+  `skip_git_repo_check` propagation/capability failure, resume,
   fork, review, structured output, last-message files, timeout, process
   ownership, queue dispatch, cancellation and result redaction.
 - `test_runtime_manager.py`, `test_app_server_events.py`: fake JSON-RPC,

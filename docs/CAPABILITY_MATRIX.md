@@ -1,6 +1,6 @@
 # Codex app-server capability matrix
 
-## Current 1.0 software closeout snapshot (2026-10-07)
+## Current 1.1 development snapshot
 
 Schema source vocabulary: `AUTHORITATIVE_LOCAL_SCHEMA`, `GENERATED_LOCAL_SCHEMA`,
 `RUNTIME_INTROSPECTION`, `DOCUMENTATION_ONLY`, `NOT_AVAILABLE`. The current
@@ -19,6 +19,7 @@ after successful runtime responses.
 | App-server feature preflight | IMPLEMENTED with limitations | Explicit bridge capability→RPC mapping; schema presence yields `SUPPORTED_WITH_LIMITATIONS`, successful runtime method response promotes only that method, method-not-found/known missing schema is negative evidence, absent/corrupt schema remains UNKNOWN. |
 | Required service startup preflight | IMPLEMENTED | Requires local schema evidence for `thread/start`, `turn/start` and successful JSON-RPC initialize before dispatch. UNKNOWN/unsupported prevents app-server startup; exec remains independent. |
 | Structured output over app-server | UNKNOWN | The installed generated schema did not let the bridge associate `outputSchema` with `turn/start`; the bridge does not claim this app-server capability. Exec `--output-schema` is a separate verified CLI capability. |
+| Exec `--skip-git-repo-check` (Python `run` / managed `start`) | IMPLEMENTED | Capability is discovered from installed `codex exec --help`, exposed in `get_capabilities()`, and required only when opt-in is true. Locally installed help advertised the flag; offline fake-CLI tests cover direct and serialized managed execution. No inference was run. `resume`, `fork`, `review`, `CodexServiceClient`, and CLI/service payloads are outside this addition. |
 | Python package-root exports | FROZEN candidate | Exact allowlist test; `CodexRuntimeManager`, SQLite, scheduler, registry, transport and worker internals stay unexported. `CodexBridge.run` now has a closed explicit signature. |
 | CLI JSON stdout contract | FROZEN candidate | Frozen parser tree and exit map are covered by tests. Finite results emit JSON; stream commands emit JSONL; foreground service logs go to stderr. |
 | Configuration validation | FROZEN candidate | Strict TOML section/key schema, exact prefixed environment names and CLI > environment > TOML > defaults where applicable; no `config_version`, unknown fields fail fast. |

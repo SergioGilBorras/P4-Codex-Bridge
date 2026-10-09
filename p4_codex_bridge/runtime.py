@@ -83,9 +83,17 @@ def build_exec_argv(
     operation = request.get("operation", "run")
     argv = resolve_codex_command()
     if operation == "run":
+        skip_git_repo_check = request.get("skip_git_repo_check", False)
+        if type(skip_git_repo_check) is not bool:
+            raise ValueError("skip_git_repo_check must be a boolean")
         argv.extend([
             "--ask-for-approval", request["permissions"]["approval_policy"],
-            "exec", "--json", "--ephemeral", "--sandbox", request["permissions"]["sandbox"],
+            "exec",
+        ])
+        if skip_git_repo_check:
+            argv.append("--skip-git-repo-check")
+        argv.extend([
+            "--json", "--ephemeral", "--sandbox", request["permissions"]["sandbox"],
             "-C", request["cwd"],
         ])
         for root in request.get("writable_roots", []):

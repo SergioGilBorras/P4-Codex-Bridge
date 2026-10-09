@@ -60,6 +60,17 @@ Do not return bearer tokens, cookies, auth headers, Codex auth internals, or env
 
 See [MCP discovery](MCP.md), [skills](SKILLS.md), [AGENTS behavior](AGENTS_BEHAVIOR.md), and the [capability matrix](CAPABILITY_MATRIX.md).
 
+## Git repository context option
+
+The 1.1 Python API offers `skip_git_repo_check=True` for direct and managed
+`codex exec` only. It omits Codex's Git-context/repository check; it does not
+disable Codex's sandbox or relax bridge `cwd`/`allowed_roots` validation,
+permissions, approval policy, or MCP security policy. It defaults to false and
+is capability-gated against the installed `codex exec --help`. A CLI that does
+not advertise the flag is rejected before work starts. Callers should enable it
+only for a specific existing workspace that is intentionally not a Git
+repository.
+
 ## Resident service boundary
 
 - The control channel is a local SQLite database under `state_dir`; it binds no
