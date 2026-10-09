@@ -4,14 +4,14 @@ The `p4-codex` entry point is installed by `pip install -e .`. Use the same
 state directory/config path in each terminal; `--state-dir` can be supplied to
 operator commands or set through `P4_CODEX_BRIDGE_STATE_DIR`.
 
-The frozen command tree, output modes and exit-code table are in
+The current command tree, output modes and exit-code table are in
 [`CONTRACT_1_0.md`](CONTRACT_1_0.md). Every command leaf accepts `--json`; JSON
 is also the default for commands with a finite result. `watch` and `events`
 produce JSONL. Usage errors emit JSON with exit code 2. Root `--help` and
 `--version` are informational text commands. `service run` is the foreground
 exception and writes logs to stderr.
 
-The 1.1 `skip_git_repo_check` option is currently a Python
+The `skip_git_repo_check` option is currently a Python
 `CodexBridge.run()`/`start()` option only; it is not part of the CLI JSON or
 service-client request contract.
 

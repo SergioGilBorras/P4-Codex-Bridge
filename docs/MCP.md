@@ -1,50 +1,33 @@
 # MCP configuration and child visibility
 
-## Evidence snapshot: 2026-10-06
+P4-Codex-Bridge can inspect **configured and advertised** MCP tools through a short-lived diagnostic app-server. This does not make those tools available to a separate `codex exec` run and does not establish a per-run permission boundary.
 
-The host session exposed these MCP namespaces: `codex_apps` 73 tools, `codex_tui` 9, `openaideveloperdocs` 5, `pycharm` 37, and `serena` 23. These are `SESSION_VISIBLE` counts for this turn, not a stable inventory. Host auth is unknown except where the Codex CLI reports a status.
+## Evidence scopes
 
-`codex mcp list` showed three global CLI entries, all enabled:
-
-| Name | CLI auth status | Diagnostic child evidence |
-|---|---|---|
-| `serena` | Unsupported | Config entry was visible to the diagnostic app-server, but startup timed out during MCP handshake; 0 tools announced. |
-| `pycharm` | Unsupported | Config entry was visible to the diagnostic app-server, but startup timed out during MCP handshake; 0 tools announced. |
-| `openaideveloperdocs` | Unknown | Five tools announced by the diagnostic app-server. One harmless host-session search succeeded; no child tool was invoked. |
-
-The app-server diagnostic also listed `codex_apps` with 89 tools. Its entry was not present in `codex mcp list`; its source and enabled state for a CLI execution are unknown. No `codex_tui` entry appeared in either the CLI MCP list or the diagnostic app-server. Do not infer that TUI tools transfer to a child.
-
-The host snapshot exposed tool schemas for these namespaces; only the OpenAI Docs search was actually called in this phase. The diagnostic child advertised names/schema, which is `ADVERTISED`, not proof of `CALLABLE`. No Jira, deployment, document, plugin, deletion, or other write operation was invoked.
-
-MCP resource enumeration did not return within the tool-call wait window, so resource counts are unknown. The 18 skills supplied to the host are a separate session inventory, not per-MCP resource counts.
-
-## State model
-
-Keep these states separate and attach their source/scope:
-
-| State | Evidence needed |
+| Scope/status | Meaning |
 |---|---|
-| `SESSION_VISIBLE` | Tool namespace/schema is exposed to the current host agent. |
-| `CONFIGURED` | A config/list endpoint shows the server entry and its scope. |
-| `ENABLED` | The source explicitly reports enabled; do not infer from registration. |
-| `ADVERTISED` | A child MCP status response returned tool descriptors. |
-| `CALLABLE` | An invocation through that exact child succeeded. Do not test destructive tools to establish it. |
-| `CHILD_VISIBLE` | The named child process reported the server/tool. Name the child kind (`diagnostic_app_server`, `exec`, etc.). |
-| `EFFECTIVE_FOR_RUN` | Evidence tied to the exact `bridge_run_id` shows the run could use or used the capability. |
+| `SESSION_VISIBLE` | A host agent interface exposes a tool name/schema |
+| `CONFIGURED` | A configuration source lists an MCP server |
+| `ENABLED` | A source explicitly reports the server enabled |
+| `ADVERTISED` | A diagnostic child reports server/tool descriptors |
+| `CALLABLE` | A harmless invocation through that exact child actually succeeds |
+| `CHILD_VISIBLE` | A named child process reports the capability |
+| `EFFECTIVE_FOR_RUN` | Evidence is bound to the matching `bridge_run_id` |
 
-The Bridge exposes `list_configured_mcps()` through `mcpServerStatus/list` in a short-lived diagnostic app-server. It reports advertised tools, but does not invoke them. `get_effective_capabilities()` leaves run-level visibility/effectiveness unknown. These results do not stand in for the separate `codex exec` child.
+Never promote a configured server, advertised tool or host-session schema to `EFFECTIVE_FOR_RUN` without matching evidence. A missing inventory is `UNKNOWN`, not proof that no MCP tools exist.
 
-## Control and security
+## Implemented diagnostics
 
-Installed `codex --help` supports `--ignore-user-config`, `-c/--config`, and profiles; the observed `codex exec` interface does not expose an MCP/tool allowlist. The app-server status/config APIs inspect servers but do not provide the Bridge a verified per-turn denylist. Therefore `analysis` cannot claim that all external MCP side effects are blocked merely because its OS sandbox is read-only. The current account's diagnostic app-server announced external write/deploy/destructive tools.
+- `list_configured_mcps()` can ask a separate diagnostic app-server for `mcpServerStatus/list`. It reports descriptors without invoking tools.
+- `list_effective_skills()` is a distinct skills diagnostic.
+- `get_effective_capabilities(include_diagnostics=True)` combines safe observations and preserves unknown exec-child effectiveness.
 
-The current `RunSecurityPolicy` gate is implemented for direct exec, managed
-exec, app-server runs and daemon submissions. It rejects requested MCP
-isolation, unknown effective MCP state, untrusted use of project context, and
-external MCP use without trusted-project plus explicit risk acknowledgement.
-The bridge cannot produce a run-specific `NONE_CONFIRMED` receipt today, so a
-default run fails closed while MCP effectiveness is unknown. An explicitly
-acknowledged external-MCP opt-in returns a warning. This gate cannot filter
-Codex's MCP tools and does not guarantee isolation.
+These methods do **not** grant or revoke tools in another Codex child. Depending on `config_policy` and the installed app-server protocol, a diagnostic call may be unavailable; for instance, app-server diagnostics cannot claim isolated effective configuration where native support is absent.
 
-The OpenAI Developer Docs MCP is for development verification only, never a runtime dependency of P4-Codex-Bridge.
+## Security controls
+
+`RunSecurityPolicy` gates project trust, project context, requested MCP isolation, external MCP allowance, side-effect risk and explicit acknowledgement on supported run/submission routes. The bridge cannot guarantee a verified per-run MCP tool allow/deny filter. Requested strict isolation fails closed; a trusted, explicit acknowledgement of unfiltered external-MCP risk can permit execution with a warning, **not** with an isolation guarantee.
+
+`READ_ONLY` applies to native filesystem sandbox policy; a side-effecting external MCP may write to unrelated services. Diagnostic discovery must not call destructive tools merely to prove access.
+
+See [security](SECURITY.md), [capabilities](CAPABILITY_MATRIX.md), and [roadmap](ROADMAP.md).

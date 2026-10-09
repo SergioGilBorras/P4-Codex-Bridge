@@ -1,25 +1,14 @@
 # Known limitations
 
-## Windows generated console-script executable
+These are current **limitations**, not a history of investigations.
 
-**Classification:** environment/toolchain limitation; non-blocking for the
-supported Windows entry points.
+- **External MCPs:** Filesystem `READ_ONLY` does not restrict external side-effecting MCP tools. The bridge cannot guarantee a per-run MCP/tool allowlist or prove that a diagnostic tool inventory applies to another exec child. See [security](SECURITY.md).
+- **App-server:** JSON-RPC support is experimental and capability-gated. Active turns cannot be blindly adopted after a manager restart; persisted lifecycle events do not include complete message-delta replay.
+- **Managed execution:** Direct `run()` is outside the resource scheduler. Managed claimed jobs are not automatically replayed after uncertain failures, to avoid duplicate work.
+- **Capabilities and models:** Installed CLI help, generated schema and model lists cannot prove login entitlement or a later run's exact available tools.
+- **Windows launcher:** Use `python -m p4_codex_bridge` or the installed `p4-codex.cmd` wrapper. Some environments may hang when invoking the packaging-generated `p4-codex.exe`; that executable is optional and its reliability is not guaranteed. `doctor` does not automatically invoke a potentially hanging launcher.
+- **Windows SCM integration:** A foreground local service is available, but no native Windows SCM wrapper is included.
+- **Git context:** `skip_git_repo_check` is supported only for Python `run()`/`start()`, requires an advertised CLI flag, and does not change the sandbox or allowed roots.
+- **Result redaction:** Redaction reduces accidental exposure but is not a data-loss prevention guarantee; downstream applications remain responsible for handling sensitive generated content.
 
-In diagnostics performed on 2026-10-07, P4's module invocation and a `.cmd`
-wrapper invoking the module worked, while the generated `p4-codex.exe` hung
-before output. An independent, minimal `tiny-launcher` package built with the
-same packaging stack showed the same behavior. Its Python callable worked and
-its generated executable hung. This is evidence against a P4-specific defect,
-but does not identify the cause. No attribution is made to setuptools, Windows,
-antivirus or sandboxing.
-
-Diagnostic environment: Python 3.13.3 x64, Windows 10 build 19045, pip 26.2.1,
-setuptools 84.0.0 and wheel 0.48.0.
-
-On Windows use `python -m p4_codex_bridge ...` with the intended interpreter or
-the installed `Scripts\p4-codex.cmd` wrapper. The automatically generated
-console-script `.exe` remains optional and environment-dependent. `doctor` does
-not execute it because a hang cannot be safely bounded without managing its
-entire descendant process tree.
-
-Decision record: [ADR-001](adr/ADR-001-windows-console-script-launcher.md).
+See [roadmap](ROADMAP.md) for candidate improvements.

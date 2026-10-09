@@ -1,79 +1,57 @@
 # Installation
 
-The package supports Python 3.10 and newer. Python 3.10 installs the small
-`tomli` compatibility dependency; newer Python uses stdlib `tomllib`.
+## Requirements
 
-From a checkout:
+- Python **3.10+**. On Python 3.10, the package installs `tomli` for TOML configuration parsing.
+- Installed official Codex CLI, available to the same operating-system user and process environment that runs the bridge.
+- Codex authentication through `codex login` or another CLI-supported mechanism. The bridge does not require `OPENAI_API_KEY` or access Codex login tokens.
+- A directory for `cwd` that already exists and passes optional `allowed_roots` checks. Git is not required if the caller explicitly uses the supported `skip_git_repo_check` option.
 
-```powershell
-python -m pip install -e .
-python -m p4_codex_bridge --version
-python -m p4_codex_bridge config validate --config C:\P4\config\p4-codex.toml
-python -m p4_codex_bridge doctor --config C:\P4\config\p4-codex.toml
-```
+Some Codex CLI distributions use Node.js internally; install dependencies required by the selected official CLI package.
 
-On Windows, the recommended invocation is `python -m p4_codex_bridge ...` using
-the intended environment's Python. The wheel also installs
-`Scripts\p4-codex.cmd` when installed into a virtual environment. This wrapper
-uses the `python.exe` beside itself, preserving the environment selection and
-paths containing spaces:
+## Install this source checkout
 
-```powershell
-& .\.venv\Scripts\p4-codex.cmd --version
-```
+Use the intended Python environment, preferably a virtual environment:
 
-The generated `Scripts\p4-codex.exe` remains available where its console-script
-launcher works, but it is optional and environment-dependent. It is not the
-only supported Windows entry point.
+    python -m pip install -e .
+    python -m p4_codex_bridge --version
+    python -m p4_codex_bridge --help
 
-`pyproject.toml` defines the `p4-codex` entry point and takes the version from
-`p4_codex_bridge.__version__`. No consumer project was installed or modified.
-Python is the only supported runtime. There is no JS/npm compatibility runtime in this repository; the existing consumer source files were left untouched.
+Source package version: **1.1.0**. Installing from this checkout is not equivalent to publishing a release to a package index.
 
-## Historical launcher diagnostic
+Preflight the external Codex CLI independently (no model call):
 
-The launcher investigation was performed before the 1.0.0 release, while the
-package reported version `0.3.0`. Its results are historical and the limitation
-below still applies to generated console-script executables.
+    codex --version
+    codex login status
+    codex exec --help
+    python -m p4_codex_bridge capabilities
 
-### Windows console-script launcher diagnostic
+The output of `codex exec --help` must contain `--skip-git-repo-check` for callers that request `skip_git_repo_check=True`.
 
-Diagnostic context: 2026-10-07, Python 3.13.3 x64, Windows 10 build 19045,
-pip 26.2.1, setuptools 84.0.0 and wheel 0.48.0. `python -m p4_codex_bridge
---version` and a `.cmd` wrapper invoking the same module passed, while the
-packaging-generated `p4-codex.exe --version` hung before output. An independent
-minimal `tiny-launcher` package built with the same packaging stack behaved the
-same way: its Python callable passed and its generated `.exe` hung. This is
-classified as an **environment or toolchain limitation**, with no evidence of
-a P4-specific defect. The precise cause is unknown; no attribution is made to
-setuptools, antivirus or Windows.
+## Windows invocation
 
-Supported Windows routes are the module invocation and the installed
-`p4-codex.cmd` wrapper. The `.exe` is optional/environment-dependent. See
-[Known limitations](KNOWN_LIMITATIONS.md) and
-[ADR-001](adr/ADR-001-windows-console-script-launcher.md).
+Prefer the interpreter selected for installation:
 
-The opt-in diagnostic `P4_RUN_WINDOWS_LAUNCHER_TESTS=1` still checks the
-packaging-generated `.exe` in an isolated wheel/venv, but is not part of normal
-tests and is not a release requirement. The bridge doctor does not execute this
-launcher automatically.
+    python -m p4_codex_bridge --version
 
-## 1.0.0 release install verification
+The installed `Scripts\p4-codex.cmd` wrapper also selects the adjacent Python interpreter:
 
-The final 1.0.0 wheel and sdist built from a clean artifact tree. The wheel was
-installed in a fresh temporary venv; distribution metadata and
-`p4_codex_bridge.__version__` report `1.0.0`. Module invocation, `--help`,
-`config validate`, `doctor --json`, `service status --json`, and the installed
-`Scripts\p4-codex.cmd` passed. The final daemon smoke also ran from the installed
-wheel. No inference is performed by package build/install or doctor checks.
-potentially hanging launcher; it reports its status as unverified.
+    & .\.venv\Scripts\p4-codex.cmd --version
 
-The earlier editable-install timeout came from using the unrelated
-`GestorProyectosIA` virtual environment, whose setuptools build backend was
-missing. It was not a setuptools hook timeout in this project. Recheck clean
-environments with their own Python and build backend; do not select a Python
-environment through a neighboring P4 project.
+The packaging-generated `p4-codex.exe` may not work reliably in every Windows toolchain; it is optional. Avoid using the generated executable as the only service or automation entry point. `doctor` does not launch it automatically.
 
-An editable install is local to the selected Python environment. Use the same
-interpreter for install and service supervision. Do not install the package into
-the consumer repositories as part of this phase.
+## Configuration and local service
+
+The local foreground service uses explicit TOML validation and a same-user state directory:
+
+    python -m p4_codex_bridge config validate --config C:\P4\config\p4-codex.toml
+    python -m p4_codex_bridge doctor --json --config C:\P4\config\p4-codex.toml
+
+These commands inspect configuration/capabilities; they do not run inference by themselves. Starting a service requires further operator choice. See [configuration](CONFIGURATION.md), [service](SERVICE.md), [security](SECURITY.md) and [known limitations](KNOWN_LIMITATIONS.md).
+
+## Development tests
+
+    python -m compileall -q p4_codex_bridge tests_py
+    python -m unittest discover -s tests_py -v
+
+The ordinary suite runs fake CLI and app-server processes; real scripts under `tests_real/` require separate consent.

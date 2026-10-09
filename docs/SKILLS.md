@@ -1,6 +1,6 @@
 # Skills discovery and child behavior
 
-## Sources and observed state
+## Current discovery and evidence limits
 
 OpenAI's [Codex customization documentation](https://learn.chatgpt.com/docs/customization/overview#skills) documents global skills under `~/.agents/skills` and repository skills under `.agents/skills`. Codex uses progressive disclosure: skill metadata is available for discovery, the `SKILL.md` body is loaded when the skill is selected, and references/scripts are loaded only when needed.
 

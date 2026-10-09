@@ -8,7 +8,7 @@ resolves exactly one run; ambiguous native identifiers fail. `watch` polls the
 persisted event journals read-only and does not hold or control the provider
 stream. See [live observability](LIVE_OBSERVABILITY.md).
 
-## Resident manager (Phase 5)
+## Resident manager
 
 `CodexRuntimeManager` owns a single stdio app-server process, one JSON-RPC
 reader, and a local SQLite registry. Threads persist independently of turns.
@@ -19,7 +19,7 @@ requests interruption for active turns before closing; `FORCE` shortens the
 wait. A bridge/server crash leaves in-flight outcomes `UNKNOWN`; it never
 silently reruns them. See [recovery](RECOVERY.md).
 
-## Phase 1: one-shot exec
+## One-shot exec
 
 Managed `start()` persists a stable `br_...` ID and queue payload, claims shared capacity/workspace resources atomically, then launches a detached bridge worker that starts exactly one `codex exec` child in the validated cwd. Direct `run()` remains one-shot and bypasses resource scheduling. The worker enforces its turn timeout, drains bounded output, sanitizes the result, and records terminal status. Prompts are sent through a pipe; pending managed payload is deleted on claim or cancellation.
 
@@ -27,9 +27,9 @@ Managed `start()` persists a stable `br_...` ID and queue payload, claims shared
 STARTING -> RUNNING -> COMPLETED | FAILED | TIMED_OUT | STOPPED
 ```
 
-`stop()` requests cooperative cancellation and escalates to identity-verified process-tree termination after its grace period. `kill()` is immediate. Only PIDs registered by this bridge can be managed. A worker that exits without a terminal row becomes `ORPHANED`; Phase 1 cannot reattach to a Codex conversation.
+`stop()` requests cooperative cancellation and escalates to identity-verified process-tree termination after its grace period. `kill()` is immediate. Only PIDs registered by this bridge can be managed. A worker that exits without a terminal row becomes `ORPHANED`; cannot reattach to a Codex conversation.
 
-## Phase 3: app-server one-turn lifecycle
+## App-server one-turn lifecycle
 
 `start_turn()` spawns one `codex app-server --listen stdio://` process, initializes it, starts an ephemeral `thread/start`, then submits one `turn/start`. A single reader thread demultiplexes JSON-RPC replies, notifications, and server-initiated requests. Notifications are normalized and distributed to bounded subscriptions. `turn.interrupt()` calls `turn/interrupt`; `turn.close()` closes the bridge-owned app-server process.
 
@@ -53,7 +53,7 @@ The runtime manager receives approval server requests on its central JSON-RPC re
 
 After restart, thread metadata is loaded locally but is marked unverified. A caller must explicitly call `resume_thread`; then the manager asks `thread/turns/list` for one bounded page (up to 100) and reconciles matching terminal turn IDs. A matching `inProgress` turn is reported but not re-adopted. No turn is re-executed. See [recovery](RECOVERY.md) for evidence boundaries.
 
-## Persistent thread lifecycle (Phase 6)
+## Persistent thread lifecycle
 
 - Evaluate official `openai-codex` SDK versus the current narrow JSON-RPC transport for lifecycle stability and deployment version pinning.
 - The runtime manager can restart its owned transport through `restart()`; this is transport restart, not automatic turn resume.

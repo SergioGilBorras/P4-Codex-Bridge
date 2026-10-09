@@ -1,127 +1,77 @@
 # P4-Codex-Bridge
 
-P4-Codex-Bridge is the shared Python API and compatibility CLI for invoking the official Codex CLI using the user's already authenticated Codex/ChatGPT session. Planned consumers are P4-Planning-Agent, P4-Jira-Agent-Orchestrator, and `F:\ProyectosPYCHARM\PythonProject\GestorProyectosIA`. No consumers are integrated or modified in this phase.
+P4-Codex-Bridge is a Python interface and operator CLI for the locally installed OpenAI Codex CLI. It uses the user's existing Codex authentication and provides execution controls, lifecycle tracking, observability, and experimental app-server integrations.
 
-The bridge owns Codex invocation, process lifecycle, cwd, timeout, sandbox/approval flags, stdin/stdout, parsing, temporary files, secret redaction and normalized errors. It does not own Jira, scheduling, planning, requirements, P4 pipelines or Orchestrator task persistence.
+**Current source version: 1.1.0.** This repository is a Python implementation; no Node.js bridge runtime or JavaScript API is provided. Node.js may still be required by a particular Codex CLI installation.
 
-## Requirements and authentication
+## What works today
 
-- Python 3.10 or newer and Codex CLI installed.
-- Node.js is still required by the currently installed Codex CLI `0.160.1` runtime on this machine.
-- Sign in using the official Codex ChatGPT login (`codex login`); the bridge delegates authentication to that installation.
-- `OPENAI_API_KEY` is not required. The bridge does not call the Responses API, read Codex tokens/cookies, or pass API key environment variables to child processes.
-- Phase 1 uses only Python's standard library. The official Python SDK `openai-codex` exists but is not installed here; see [architecture](docs/ARCHITECTURE.md).
+- Synchronous `CodexBridge.run()` and managed queued `CodexBridge.start()` execute `codex exec`. Prompts are passed on stdin, never interpolated into a shell command.
+- `skip_git_repo_check=True` is supported by `run()` and `start()` for existing non-Git directories when the installed CLI advertises `--skip-git-repo-check`. Default: `False`.
+- `cwd` validation, optional `allowed_roots`, sandbox/approval settings, timeouts, model options, structured output, final-message capture and safe result handling.
+- A shared SQLite scheduler for managed exec jobs and resident app-server turns, with resource limits, workspace locks, cancellation and local run discovery. Direct `run()` calls do not use the scheduler.
+- A resident app-server manager for threads, turns, normalized events, manual approvals and conservative lifecycle recovery. Its protocol is experimental and capability-gated.
+- A Python operator CLI (`p4-codex` or `python -m p4_codex_bridge`), a foreground local service, and typed cross-process service requests.
+- Local capability discovery, safe diagnostics, and fake/offline automated tests.
 
-## Python usage
+**Limitations:** Per-run MCP/tool isolation is not guaranteed; project configuration and external MCP side effects require explicit risk assessment. App-server and child-visible tools/skills must not be inferred from host session inventories. See [security](docs/SECURITY.md), [capabilities](docs/CAPABILITY_MATRIX.md) and [known limitations](docs/KNOWN_LIMITATIONS.md).
 
-Install this checkout in the consumer environment:
+## Requirements
 
-```powershell
-python -m pip install -e .
-```
+- Python 3.10+.
+- An installed Codex CLI and authentication through its supported login mechanism.
+- A real, existing `cwd` for Codex calls; creating a new directory or a Git repository is not a bridge requirement.
+- Installation into a selected Python environment. The bridge does not require `OPENAI_API_KEY` and does not perform a direct Responses API call.
 
-```python
-from p4_codex_bridge import CodexBridge, CodexPermissions, SandboxMode, ApprovalPolicy
+## Install from this checkout
 
-bridge = CodexBridge(allowed_roots=[r"F:\ProyectosPYCHARM\PythonProject"])
-result = bridge.run(
-    "Analyze the selected project",
-    cwd=r"F:\ProyectosPYCHARM\PythonProject\P4",
-    profile="analysis",
-    timeout_seconds=300,
-    permissions=CodexPermissions(SandboxMode.READ_ONLY, ApprovalPolicy.NEVER),
-)
-if result.ok:
-    print(result.content)
-else:
-    print(result.error)
-```
+From the repository root:
 
-For an existing directory outside a Git repository, opt in to Codex's
-repository-context bypass without changing the workspace or sandbox:
+    python -m pip install -e .
+    python -m p4_codex_bridge --version
+    codex --version
+    codex login status
 
-```python
-result = bridge.run(
-    "Summarize these files",
-    cwd=r"C:\P4\scratch",
-    skip_git_repo_check=True,
-)
-```
+For Windows, prefer `python -m p4_codex_bridge` or the installed `p4-codex.cmd` entry point when the generated console-script executable is unreliable. See [installation](docs/INSTALLATION.md).
 
-`cwd` must still be an existing directory inside `allowed_roots`. The option is
-available on `run()` and managed `start()` when the installed Codex CLI advertises
-`--skip-git-repo-check`; check
-`bridge.get_capabilities()["exec"]["skip_git_repo_check"]` before relying on it.
-It does not disable the sandbox. See [Python API](docs/PYTHON_API.md) for empty,
-temporary and existing non-Git workspace examples and compatibility boundaries.
+## Python API example
 
-`CodexBridge.start()` is for asynchronous process management; it starts a managed Codex CLI operation. `run()` also supports `resume()`, `fork()` and `review()`; resume/fork retain the stored Codex session permissions and explicitly require caller acknowledgement. `output_schema` returns parsed `structured_output`; `capture_last_message=True` hides the CLI temp-file handling. See [Python API](docs/PYTHON_API.md) and [lifecycle](docs/LIFECYCLE.md).
+The example illustrates the API, not a guarantee that an untrusted project or an unknown external MCP configuration can pass the security gate.
 
-For live app-server streaming, use `CodexBridge.start_turn()` or `stream_events()` / `astream_events()`. It returns normalized message, tool and lifecycle events; approval requests are manual by default and can be explicitly approved or rejected while the owning turn is live. This API keeps its existing per-turn connection behavior. See [events](docs/EVENTS.md), [approvals](docs/APPROVALS.md), and the [capability matrix](docs/CAPABILITY_MATRIX.md).
+    from p4_codex_bridge import (
+        CodexBridge, CodexPermissions, SandboxMode, ApprovalPolicy
+    )
 
-The Phase 5 `CodexRuntimeManager` owns one resident stdio app-server process and a SQLite lifecycle/resource queue. Managed `CodexBridge.start()` exec jobs use that same queue, global/backend limits and workspace locks; direct one-shot `run()` stays unscheduled. Active cancellation is routed through the owning backend. Claimed exec work is not re-adopted after controller loss, and claimed app-server turns are not replayed automatically. See [runtime recovery](docs/RECOVERY.md), [resource scheduler](docs/RESOURCE_SCHEDULER.md), and [version compatibility](docs/VERSION_COMPATIBILITY.md).
+    root = r"C:\work\scratch"  # existing directory
+    bridge = CodexBridge(allowed_roots=[root])
+    result = bridge.run(
+        "Describe the input in one sentence",
+        cwd=root,
+        permissions=CodexPermissions(SandboxMode.READ_ONLY, ApprovalPolicy.NEVER),
+        skip_git_repo_check=True,  # explicit opt-in for non-Git cwd
+        capture_last_message=True,
+    )
+    print(result.content if result.ok else result.error)
 
-Live discovery is available with `p4-codex ps`, `p4-codex inspect <id>`, and read-only `p4-codex watch <id> --follow`. Pass optional operational metadata (`agent_name`, `agent_role`, `task_key`, `project`, `workspace`) through Python `start()` / `run()` or manager thread/turn creation. See [live observability](docs/LIVE_OBSERVABILITY.md). Attach is not supported.
+`skip_git_repo_check` only bypasses the CLI Git-context check; it does **not** change sandbox, filesystem read visibility, allowed roots, approvals, MCP configuration, or Codex authentication. `CodexBridge.resume()`, `fork()`, `review()` and service-client/CLI submissions have separate contracts.
 
 ## Operator CLI
 
-The installed Python script is `p4-codex`. For local checkout use `python -m p4_codex_bridge`.
+    python -m p4_codex_bridge --help
+    python -m p4_codex_bridge capabilities
+    python -m p4_codex_bridge models
+    python -m p4_codex_bridge ps
+    python -m p4_codex_bridge doctor --json
 
-```powershell
-'{"prompt":"Summarize this project","cwd":"F:\\ProyectosPYCHARM\\PythonProject\\P4","profile":"analysis"}' | python -m p4_codex_bridge run
-python -m p4_codex_bridge ps
-python -m p4_codex_bridge status <run-id>
-python -m p4_codex_bridge result <run-id>
-python -m p4_codex_bridge models
-python -m p4_codex_bridge capabilities
-python -m p4_codex_bridge events <turn-id>
-python -m p4_codex_bridge events <turn-id> --follow --json
-python -m p4_codex_bridge approvals
-python -m p4_codex_bridge approve <approval-id>
-python -m p4_codex_bridge reject <approval-id>
-python -m p4_codex_bridge service run --config C:\P4\config\p4-codex.toml
-python -m p4_codex_bridge service status --config C:\P4\config\p4-codex.toml
-python -m p4_codex_bridge health --config C:\P4\config\p4-codex.toml
-python -m p4_codex_bridge metrics --json --config C:\P4\config\p4-codex.toml
-python -m p4_codex_bridge service stop --config C:\P4\config\p4-codex.toml
-```
+Consult [CLI](docs/CLI.md) before submitting jobs. The foreground service and cross-process submission have their own [service documentation](docs/SERVICE.md). Capabilities and model access depend on the installed Codex version and account, not merely on the bridge package version.
 
-Commands also include `service run|status|stop|restart|recover`, `health`, `metrics`, `config show|validate` and `doctor`. `service run` needs no stdin. Pass the same `--state-dir` (or environment override) from other terminals so their discovery/control commands use the daemon's database. `run` and `start` receive one JSON object on stdin. stdout is JSON for one-shot CLI results; diagnostics are sanitized on stderr. `events --follow` polls lifecycle events only; it cannot recover message deltas. `cancel` withdraws queued work or asks the owning backend to interrupt active managed work. See [CLI](docs/CLI.md), [service](docs/SERVICE.md), [configuration](docs/CONFIGURATION.md), [installation](docs/INSTALLATION.md), and [Windows guidance](docs/WINDOWS_SERVICE.md).
+## Verification
 
-## State and scope
+    python -m compileall -q p4_codex_bridge tests_py
+    python -m unittest discover -s tests_py -v
 
-Phases 1–3 provide one-shot exec, dynamic model discovery, managed process registry, ephemeral app-server streaming, event normalization, explicit approvals, interruption, bounded queues and lifecycle replay. Phase 4 adds exec resume/fork/review, structured output, final-message capture, typed tuning/permissions, config introspection and diagnostic MCP/skills discovery. These diagnostic app-server views do not prove a separate exec child sees the same resources. Child visibility/effectiveness for AGENTS, skills and MCPs remains unconfirmed until the manual checks are run. Process rows include bridge run id, PIDs, backend, cwd, model, profile, timestamps, status, exit code and sanitized last error. Exec registry rows omit prompts. Pending scheduler payloads are persisted in SQLite until claim/cancel (maximum 1 MiB), then deleted. Lifecycle events/approval state are sanitized; message deltas/tool output are transient.
-
-Python is the only canonical runtime. The old independent JavaScript implementation and npm workflow were removed: there was no bridge consumer requiring them, and they duplicated subprocess/config/security logic. The legacy JavaScript sources in P4-Planning-Agent were not modified. `CodexBridge.resume/fork/review` are exec operations; persistent app-server thread resume/fork are separate manager operations.
-
-## Tests
-
-```powershell
-python -m compileall -q p4_codex_bridge tests_py
-python -m unittest discover -s tests_py -v
-python tests_real/smoke_streaming.py
-```
-
-Manual smokes are not part of the automated suite: `python tests_real/smoke_structured_output.py`, `python tests_real/smoke_agents_context.py --policy project` (also accepts `isolated` or `explicit`), and `python tests_real/smoke_mcp_visibility.py`. Each generation smoke makes at most one turn. MCP visibility only queries the diagnostic app-server inventory.
-
-Automated tests use fake Codex/app-server executables; they do not call Codex or Jira. Manual real smokes are separate: `python tests_real/smoke_streaming.py` makes one read-only turn; `python tests_real/smoke_approval_reject.py` is manual only and rejects a file-write request in its isolated workspace. There is no Node/npm test workflow.
+Automated tests use fake Codex/app-server processes and do not make real model calls. Scripts in `tests_real/` are manual, opt-in and may incur usage.
 
 ## Documentation
 
-- [Architecture and capability audit](docs/ARCHITECTURE.md)
-- [Installation](docs/INSTALLATION.md) and [known limitations](docs/KNOWN_LIMITATIONS.md)
-- [Python API](docs/PYTHON_API.md)
-- [Process lifecycle and Phase 2](docs/LIFECYCLE.md)
-- [Installed protocol capability matrix](docs/CAPABILITY_MATRIX.md)
-- [Streaming events](docs/EVENTS.md)
-- [Approvals](docs/APPROVALS.md)
-- [Execution contract](docs/CONTRACT.md)
-- [Profiles](docs/PROFILES.md)
-- [Features](docs/FEATURE_CATALOG.md)
-- [Tests](docs/TEST_CATALOG.md)
-- [Test token budget](docs/TEST_TOKEN_BUDGET.md)
-- [Tools](docs/TOOLS_CATALOG.md)
-- [Skills](docs/SKILLS_CATALOG.md)
-# Resource scheduling
-
-The resident app-server runtime and managed `CodexBridge.start()` exec runs share a persistent SQLite resource queue, global/backend/profile limits, workspace locks, cancellation and run observability. Direct one-shot `CodexBridge.run()` remains outside scheduling. P4-Jira-Agent-Orchestrator continues to select and prioritize business work; the bridge schedules only Codex resources. See [Resource Scheduler](docs/RESOURCE_SCHEDULER.md) and [Concurrency](docs/CONCURRENCY.md). `p4-codex resources` and `p4-codex limits` inspect local capacity. Automated scheduler tests use fakes and consume no Codex tokens.
+Start with the [documentation index](docs/README.md) for current API, architecture, security, operational guidance, known limitations and the [roadmap](docs/ROADMAP.md).
