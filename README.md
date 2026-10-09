@@ -37,6 +37,24 @@ else:
     print(result.error)
 ```
 
+For an existing directory outside a Git repository, opt in to Codex's
+repository-context bypass without changing the workspace or sandbox:
+
+```python
+result = bridge.run(
+    "Summarize these files",
+    cwd=r"C:\P4\scratch",
+    skip_git_repo_check=True,
+)
+```
+
+`cwd` must still be an existing directory inside `allowed_roots`. The option is
+available on `run()` and managed `start()` when the installed Codex CLI advertises
+`--skip-git-repo-check`; check
+`bridge.get_capabilities()["exec"]["skip_git_repo_check"]` before relying on it.
+It does not disable the sandbox. See [Python API](docs/PYTHON_API.md) for empty,
+temporary and existing non-Git workspace examples and compatibility boundaries.
+
 `CodexBridge.start()` is for asynchronous process management; it starts a managed Codex CLI operation. `run()` also supports `resume()`, `fork()` and `review()`; resume/fork retain the stored Codex session permissions and explicitly require caller acknowledgement. `output_schema` returns parsed `structured_output`; `capture_last_message=True` hides the CLI temp-file handling. See [Python API](docs/PYTHON_API.md) and [lifecycle](docs/LIFECYCLE.md).
 
 For live app-server streaming, use `CodexBridge.start_turn()` or `stream_events()` / `astream_events()`. It returns normalized message, tool and lifecycle events; approval requests are manual by default and can be explicitly approved or rejected while the owning turn is live. This API keeps its existing per-turn connection behavior. See [events](docs/EVENTS.md), [approvals](docs/APPROVALS.md), and the [capability matrix](docs/CAPABILITY_MATRIX.md).

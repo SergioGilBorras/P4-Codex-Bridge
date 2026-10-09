@@ -11,6 +11,10 @@ produce JSONL. Usage errors emit JSON with exit code 2. Root `--help` and
 `--version` are informational text commands. `service run` is the foreground
 exception and writes logs to stderr.
 
+The 1.1 `skip_git_repo_check` option is currently a Python
+`CodexBridge.run()`/`start()` option only; it is not part of the CLI JSON or
+service-client request contract.
+
 ## Resident service
 
 ```powershell

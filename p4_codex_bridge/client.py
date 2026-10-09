@@ -212,6 +212,7 @@ class CodexBridge:
             "json_events": "--json" in exec_help,
             "output_schema": "--output-schema" in exec_help,
             "output_last_message": "--output-last-message" in exec_help,
+            "skip_git_repo_check": "--skip-git-repo-check" in exec_help,
             "stdin_prompt": "stdin" in exec_help.lower(),
             "sandbox": [mode.value for mode in SandboxMode if mode.value in exec_help],
             "approval_policies": [policy.value for policy in ApprovalPolicy if policy.value in root_help],
@@ -223,6 +224,7 @@ class CodexBridge:
         exec_capabilities.update({
             "structured_output_capability": capability("--output-schema" in exec_help, cli_source),
             "last_message_capability": capability("--output-last-message" in exec_help, cli_source),
+            "skip_git_repo_check_capability": capability("--skip-git-repo-check" in exec_help, cli_source),
             "writable_roots_capability": capability("--add-dir" in exec_help, cli_source, notes=("CLI --add-dir is an additional writable directory; bridge still validates roots.",)),
             "reasoning_effort": capability(True, "installed model/list metadata; selected values are model-specific"),
             "reasoning_summary": capability(True, "installed app-server ConfigReadResponse schema: auto/concise/detailed/none", experimental=True),
@@ -851,6 +853,7 @@ class CodexBridge:
         reasoning_summary: ReasoningSummary | str | None = None,
         verbosity: ModelVerbosity | str | None = None,
         output_schema: dict[str, Any] | None = None,
+        skip_git_repo_check: bool = False,
         capture_last_message: bool = False,
         include_raw_output: bool = False,
         config_policy: str | None = None,
@@ -866,10 +869,13 @@ class CodexBridge:
             prompt, cwd=cwd, profile=profile, model=model, timeout_seconds=timeout_seconds,
             permissions=permissions, reasoning_effort=reasoning_effort,
             reasoning_summary=reasoning_summary, verbosity=verbosity, output_schema=output_schema,
+            skip_git_repo_check=skip_git_repo_check,
             capture_last_message=capture_last_message, include_raw_output=include_raw_output,
             config_policy=config_policy, config_overrides=config_overrides,
             security_policy=security_policy,
         )
+        if skip_git_repo_check:
+            self._require_exec_capability("run", flag="--skip-git-repo-check")
         if not isinstance(announce_run, bool): raise ValueError("announce_run must be boolean")
         request["operation"] = "run"
         request["announce_run"] = announce_run
@@ -919,6 +925,7 @@ class CodexBridge:
         reasoning_summary: ReasoningSummary | str | None = None,
         verbosity: ModelVerbosity | str | None = None,
         output_schema: dict[str, Any] | None = None,
+        skip_git_repo_check: bool = False,
         capture_last_message: bool = False,
         include_raw_output: bool = False,
         config_policy: str | None = None,
@@ -936,10 +943,13 @@ class CodexBridge:
             timeout_seconds=timeout_seconds, permissions=permissions,
             reasoning_effort=reasoning_effort, reasoning_summary=reasoning_summary,
             verbosity=verbosity, output_schema=output_schema,
+            skip_git_repo_check=skip_git_repo_check,
             capture_last_message=capture_last_message, include_raw_output=include_raw_output,
             config_policy=config_policy, config_overrides=config_overrides,
             security_policy=security_policy,
         )
+        if skip_git_repo_check:
+            self._require_exec_capability("run", flag="--skip-git-repo-check")
         request["operation"] = "run"
         if not isinstance(announce_run, bool): raise ValueError("announce_run must be boolean")
         request["announce_run"] = announce_run
@@ -1045,6 +1055,7 @@ class CodexBridge:
         reasoning_summary: ReasoningSummary | str | None = None,
         verbosity: ModelVerbosity | str | None = None,
         output_schema: dict[str, Any] | None = None,
+        skip_git_repo_check: bool = False,
         capture_last_message: bool = False,
         include_raw_output: bool = False,
         config_policy: str | None = None,
@@ -1061,6 +1072,7 @@ class CodexBridge:
             "timeout_seconds": timeout_seconds, "permissions": permissions,
             "reasoning_effort": reasoning_effort, "reasoning_summary": reasoning_summary,
             "verbosity": verbosity, "output_schema": output_schema,
+            "skip_git_repo_check": skip_git_repo_check,
             "capture_last_message": capture_last_message, "include_raw_output": include_raw_output,
             "config_policy": config_policy, "config_overrides": config_overrides,
             "metadata": metadata, "security_policy": security_policy,
@@ -1467,6 +1479,7 @@ class CodexBridge:
         include_raw_output: bool,
         config_policy: str | None,
         config_overrides: dict[str, Any] | None,
+        skip_git_repo_check: bool = False,
         security_policy: RunSecurityPolicy | None = None,
     ) -> dict[str, Any]:
         if not isinstance(prompt, str) or not prompt.strip():
@@ -1484,6 +1497,8 @@ class CodexBridge:
         verbosity_value = ModelVerbosity(verbosity).value if verbosity is not None else None
         if not isinstance(capture_last_message, bool) or not isinstance(include_raw_output, bool):
             raise ValueError("capture_last_message and include_raw_output must be booleans")
+        if type(skip_git_repo_check) is not bool:
+            raise ValueError("skip_git_repo_check must be a boolean")
         if output_schema is not None and not isinstance(output_schema, dict):
             raise ValueError("output_schema must be a JSON object")
         if output_schema is not None:
@@ -1562,6 +1577,7 @@ class CodexBridge:
             "writable_roots": [str(path) for path in roots],
             "network_access": network_access,
             "output_schema": output_schema,
+            "skip_git_repo_check": skip_git_repo_check,
             "capture_last_message": capture_last_message,
             "include_raw_output": include_raw_output,
             "config_policy": config_policy,

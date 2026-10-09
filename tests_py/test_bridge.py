@@ -30,7 +30,7 @@ if args == ["--version"]:
 elif args == ["--help"]:
     print("Usage: codex\nexec app-server login mcp resume agents features --ask-for-approval never on-request")
 elif args == ["exec", "--help"]:
-    print("Usage: codex exec --json --output-schema --output-last-message --model --sandbox read-only workspace-write danger-full-access --ask-for-approval never on-request -C --ignore-user-config stdin")
+    print("Usage: codex exec --json --output-schema --output-last-message --skip-git-repo-check --model --sandbox read-only workspace-write danger-full-access --ask-for-approval never on-request -C --ignore-user-config stdin")
 elif args[:2] == ["exec", "resume"] and "--help" in args:
     print("Usage: codex exec resume SESSION_ID [PROMPT] --json --output-schema --output-last-message --model -c --ignore-user-config")
 elif args[:2] == ["exec", "fork"] and "--help" in args:
@@ -146,6 +146,79 @@ class BridgeTests(unittest.TestCase):
         result = self.bridge.run("hello; $env:SECRET", cwd=self.cwd)
         self.assertTrue(result.ok)
         self.assertIn("hello; $env:SECRET", result.content)
+
+    def test_skip_git_repo_check_direct_exec_is_opt_in_and_argument_safe(self):
+        workspace = self.root / "workspace with spaces & brackets"
+        workspace.mkdir()
+        self.assertFalse((workspace / ".git").exists())
+        permissions = CodexPermissions(SandboxMode.READ_ONLY, ApprovalPolicy.NEVER)
+
+        default_result = self.bridge.run("args", cwd=workspace, model="args")
+        default_args = json.loads(default_result.content.removeprefix("got:"))
+        self.assertNotIn("--skip-git-repo-check", default_args)
+
+        prompt = "keep this on stdin; $not-a-shell-variable"
+        result = self.bridge.run(prompt, cwd=workspace, model="args", permissions=permissions,
+                                 skip_git_repo_check=True)
+        args = json.loads(result.content.removeprefix("got:"))
+        self.assertEqual(args.count("--skip-git-repo-check"), 1)
+        self.assertLess(args.index("exec"), args.index("--skip-git-repo-check"))
+        self.assertEqual(args[args.index("-C") + 1], str(workspace.resolve()))
+        self.assertIn("--sandbox", args)
+        self.assertIn("read-only", args)
+        self.assertIn("--ask-for-approval", args)
+        self.assertIn("never", args)
+        self.assertNotIn(prompt, args)
+
+    def test_skip_git_repo_check_managed_exec_is_serialized_to_worker(self):
+        workspace = self.root / "existing workspace without git"
+        workspace.mkdir()
+        self.assertFalse((workspace / ".git").exists())
+        run = self.bridge.start("managed prompt stays on stdin", cwd=workspace, model="args",
+                                skip_git_repo_check=True,
+                                permissions=CodexPermissions(SandboxMode.READ_ONLY, ApprovalPolicy.NEVER))
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and self.bridge.status(run.bridge_run_id).status not in ResourceScheduler.TERMINAL:
+            time.sleep(0.05)
+        self.assertEqual(self.bridge.status(run.bridge_run_id).status, RunStatus.COMPLETED)
+        result = self.bridge.read_result(run.bridge_run_id)
+        self.assertIsNotNone(result)
+        args = json.loads(result.content.removeprefix("got:"))
+        self.assertEqual(args.count("--skip-git-repo-check"), 1)
+        self.assertEqual(args[args.index("-C") + 1], str(workspace.resolve()))
+        self.assertIn("read-only", args)
+        self.assertIn("never", args)
+        self.assertNotIn("managed prompt stays on stdin", args)
+
+    def test_skip_git_repo_check_requires_real_boolean_for_both_apis(self):
+        for value in (1, 0, "true", None, [], {}):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "must be a boolean"):
+                self.bridge.run("x", cwd=self.cwd, skip_git_repo_check=value)
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "must be a boolean"):
+                self.bridge.start("x", cwd=self.cwd, skip_git_repo_check=value)
+        self.assertEqual(self.bridge.list_runs(), [])
+
+    def test_skip_git_repo_check_is_not_a_config_override(self):
+        with self.assertRaisesRegex(ValueError, "unsupported Codex config override key"):
+            self.bridge.run("x", cwd=self.cwd, config_policy="explicit",
+                            config_overrides={"skip_git_repo_check": True})
+
+    def test_skip_git_repo_check_fails_before_dispatch_when_cli_lacks_flag(self):
+        self.codex.write_text(FAKE_CODEX.replace(" --skip-git-repo-check", ""), encoding="utf-8")
+        self.bridge._capability_probe_cache.clear()
+        self.assertFalse(self.bridge.get_capabilities()["exec"]["skip_git_repo_check"])
+        self.assertEqual(self.bridge.get_capabilities()["exec"]["skip_git_repo_check_capability"]["status"], "NOT_SUPPORTED")
+        with self.assertRaises(CapabilityUnavailableError):
+            self.bridge.run("x", cwd=self.cwd, skip_git_repo_check=True)
+        with self.assertRaises(CapabilityUnavailableError):
+            self.bridge.start("x", cwd=self.cwd, skip_git_repo_check=True)
+        self.assertEqual(self.bridge.list_runs(), [])
+
+    def test_skip_git_repo_check_false_keeps_compatibility_with_older_cli(self):
+        self.codex.write_text(FAKE_CODEX.replace(" --skip-git-repo-check", ""), encoding="utf-8")
+        self.bridge._capability_probe_cache.clear()
+        result = self.bridge.run("still works", cwd=self.cwd)
+        self.assertTrue(result.ok)
 
     def test_managed_exec_start_uses_persistent_queue_and_dispatches_next(self):
         scheduler = ResourceScheduler(self.bridge.registry.path)

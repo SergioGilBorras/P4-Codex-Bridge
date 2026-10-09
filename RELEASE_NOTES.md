@@ -1,5 +1,19 @@
 # Release notes
 
+## 1.1.0 (API evolution; not published)
+
+- Added the typed, opt-in `skip_git_repo_check=False` parameter to
+  `CodexBridge.run()` and managed `CodexBridge.start()`.
+- The bridge discovers `--skip-git-repo-check` from installed `codex exec
+  --help`, reports it through `get_capabilities()`, and fails with
+  `CapabilityUnavailableError` before execution if the option is unavailable.
+- The option applies only to Git repository context validation. Existing cwd,
+  allowed-root, security, sandbox, approval and MCP policies remain active.
+- `CodexBridge.resume()`, `fork()`, `review()`, `CodexServiceClient` and
+  cross-process service/CLI submissions retain their existing contracts.
+- See [the 1.1 contract addendum](docs/CONTRACT_1_1.md). This source change is
+  not a PyPI publication or official release.
+
 ## 1.0.0
 
 First stable local release of P4-Codex-Bridge. Python is the canonical runtime
