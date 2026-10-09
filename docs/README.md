@@ -27,4 +27,4 @@ This index describes the **current 1.1.0 source tree**. Product functionality, v
 - [Development workflow](DEVELOPMENT_WORKFLOW.md), [test catalog](TEST_CATALOG.md), [model-use policy](TEST_TOKEN_BUDGET.md).
 - [Tools](TOOLS_CATALOG.md) and [skills catalog](SKILLS_CATALOG.md) explain *runtime discovery*; they do not assert that a previous development-session inventory is installed now.
 
-The active documentation intentionally focuses on supported behavior and limitations. Versioned release/checklist or architecture-decision records elsewhere in the repository are not the source for present capabilities.
+The linked pages describe supported behavior, known limits and candidate improvements; they do not guarantee that a given CLI installation or account enables every feature.

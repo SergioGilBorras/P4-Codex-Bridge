@@ -5,7 +5,7 @@ state directory/config path in each terminal; `--state-dir` can be supplied to
 operator commands or set through `P4_CODEX_BRIDGE_STATE_DIR`.
 
 The current command tree, output modes and exit-code table are in
-[`CONTRACT_1_0.md`](CONTRACT_1_0.md). Every command leaf accepts `--json`; JSON
+[execution contract](CONTRACT.md). Every command leaf accepts `--json`; JSON
 is also the default for commands with a finite result. `watch` and `events`
 produce JSONL. Usage errors emit JSON with exit code 2. Root `--help` and
 `--version` are informational text commands. `service run` is the foreground

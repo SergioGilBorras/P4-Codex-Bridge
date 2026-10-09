@@ -103,8 +103,8 @@ pending cleanup are available through `health --json`, `doctor --json` and
 - App-server is experimental; startup handshake failure prevents dispatcher
   startup.
 - Compatibility APIs classify support from observed capabilities and report
-  un-audited newer versions with limitations; this is not a broad guarantee
-  against protocol changes.
+  unverified installed Codex versions with limitations; a version number does not
+  guarantee compatibility with a changing app-server protocol.
 - Service command requests left CLAIMED at crash are failed as outcome unknown
   and are never replayed automatically.
 - Service restart and stop are tested with a fake protocol, not installed as a
