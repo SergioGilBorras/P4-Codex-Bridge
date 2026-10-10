@@ -249,9 +249,21 @@ def read_service_state(state_dir: str | Path) -> dict[str, Any]:
         # A fresh heartbeat is useful liveness evidence only when Windows denied
         # process-time inspection; an explicit identity mismatch never falls back.
         identity_unavailable = not identity or not observed_identity
-        alive = identity_verified or (identity_unavailable and 0 <= heartbeat_age <= 5)
+        # STOPPED is written only after the runtime manager and its singleton
+        # lock have shut down. On POSIX, an exited child can remain visible as
+        # a zombie until its parent calls wait(); its /proc start identity still
+        # matches, but it cannot serve work and must not keep service stop
+        # requests pending while the parent waits for this status response.
+        service_stopped = data.get("state") == "STOPPED"
+        alive = False if service_stopped else identity_verified or (
+            identity_unavailable and 0 <= heartbeat_age <= 5
+        )
         data["process_identity_verified"] = identity_verified
-        data["liveness_source"] = "process_identity" if identity_verified else "recent_heartbeat" if alive else "stale_or_mismatched"
+        data["liveness_source"] = (
+            "service_state_stopped" if service_stopped else
+            "process_identity" if identity_verified else
+            "recent_heartbeat" if alive else "stale_or_mismatched"
+        )
         data["running"] = alive
         if not alive and data.get("state") not in {"STOPPED", "CRASHED"}:
             data["state"] = "CRASHED"

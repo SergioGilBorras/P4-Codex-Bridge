@@ -186,6 +186,32 @@ class MaintenanceTests(unittest.TestCase):
 
 
 class ResidentServiceTests(unittest.TestCase):
+    def test_stopped_service_state_wins_over_still_visible_process_identity(self):
+        import json
+        import sqlite3
+        from contextlib import closing
+        from p4_codex_bridge.service import read_service_state
+
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "runs.sqlite3"
+            _ensure_service_schema(db_path)
+            with closing(sqlite3.connect(db_path)) as db:
+                db.execute(
+                    "INSERT INTO bridge_service_state(singleton,instance_id,pid,process_identity,state,started_at,heartbeat_at,payload_json,last_fatal_error) "
+                    "VALUES(1,?,?,?,?,?,?,?,NULL)",
+                    ("service-test", os.getpid(), "same-process-identity", "STOPPED",
+                     "2026-10-10T00:00:00+00:00", "invalid-but-irrelevant", json.dumps({})),
+                )
+                db.commit()
+            with patch("p4_codex_bridge.service._process_identity", return_value="same-process-identity"):
+                state = read_service_state(root)
+
+        self.assertTrue(state["process_identity_verified"])
+        self.assertFalse(state["running"])
+        self.assertEqual(state["state"], "STOPPED")
+        self.assertEqual(state["liveness_source"], "service_state_stopped")
+
     def test_foreground_fake_service_status_metrics_stop_and_singleton(self):
         with TemporaryDirectory(prefix="p4 service state ") as temp:
             root = Path(temp)
