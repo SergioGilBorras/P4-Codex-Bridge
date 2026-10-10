@@ -44,7 +44,9 @@ class PortableTemporaryDirectoryTests(unittest.TestCase):
         parent.mkdir()
         with temporary_directory("P4BridgeTest", parent=parent) as raw_path:
             managed = Path(raw_path)
-            self.assertEqual(managed.parent, parent.resolve())
+            # Windows may represent the same directory through its 8.3 and
+            # long-name spellings; compare filesystem identity, not strings.
+            self.assertTrue(managed.parent.samefile(parent))
             marker = managed / "marker.txt"
             marker.write_text("temporary", encoding="utf-8")
             self.assertEqual(marker.read_text(encoding="utf-8"), "temporary")

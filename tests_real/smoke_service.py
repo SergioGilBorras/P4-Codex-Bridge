@@ -10,11 +10,12 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
 from dataclasses import asdict
+
+from portable_tempdirs import temporary_directory
 
 try:
     from p4_codex_bridge import CodexBridge, ProjectTrust, RunSecurityPolicy
@@ -82,7 +83,7 @@ def main() -> int:
         print(json.dumps({"status": "SKIPPED_MODEL_UNAVAILABLE", "requested_model": MODEL_ID}))
         return 2
 
-    with tempfile.TemporaryDirectory(prefix="p4-codex-service-smoke-") as temp:
+    with temporary_directory("P4CodexServiceSmoke") as temp:
         root = Path(temp).resolve()
         workspace = root / "workspace"
         workspace.mkdir()

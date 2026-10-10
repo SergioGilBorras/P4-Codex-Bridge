@@ -35,7 +35,10 @@ class RunSecurityTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             root = Path(temp)
             caps = AppServerCapabilitySet({key: CapabilityStatus.SUPPORTED for key in FEATURE_METHODS}, "fixture")
-            manager = CodexRuntimeManager(cwd=root, database_path=root / "runtime.sqlite3", capability_set=caps)
+            # Security rejection must happen before any RPC; the test must not
+            # depend on a real Codex executable being installed on the runner.
+            manager = CodexRuntimeManager(cwd=root, database_path=root / "runtime.sqlite3",
+                                         capability_set=caps, command=["fake-codex"])
             manager.state = RuntimeState.HEALTHY
             with self.assertRaises(RunSecurityRejectedError):
                 manager.create_thread(cwd=root)

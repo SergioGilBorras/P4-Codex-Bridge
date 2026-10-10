@@ -61,7 +61,8 @@ class RealSmokeScriptTests(unittest.TestCase):
             root = Path(temporary)
             workspace = root / "workspace"
             workspace.mkdir()
-            config = ServiceConfig.load(module._write_service_config(root, workspace))
+            config = ServiceConfig.load(module._write_service_config(root, workspace),
+                                        state_dir=root / "isolated-state")
             self.assertEqual(config.log_dir, (root / "logs").resolve())
             self.assertEqual(config.cwd, workspace.resolve())
 

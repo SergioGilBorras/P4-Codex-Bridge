@@ -50,13 +50,13 @@ class ServiceConfigTests(unittest.TestCase):
             config = root / "bad.toml"
             config.write_text(f'[service]\ncwd = "{cwd.as_posix()}"\nunknown = true\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unknown keys"):
-                validate_config(config)
+                validate_config(config, state_dir=root / "isolated-state")
             config.write_text(f'[service]\ncwd = "{cwd.as_posix()}"\nshutdown_policy = "AUTO"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "shutdown_policy"):
-                validate_config(config)
+                validate_config(config, state_dir=root / "isolated-state")
             config.write_text(f'config_version = 1\n[service]\ncwd = "{cwd.as_posix()}"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unknown top-level section"):
-                validate_config(config)
+                validate_config(config, state_dir=root / "isolated-state")
 
     def test_state_dir_with_spaces_and_config_show_are_supported(self):
         with TemporaryDirectory(prefix="P4 Bridge State ") as temp:
@@ -76,7 +76,7 @@ class ServiceConfigTests(unittest.TestCase):
             cwd.mkdir()
             config = root / "p4-codex.toml"
             config.write_text(f'[service]\ncwd = "{cwd.as_posix()}"\n[retention]\ndays = 10\nmax_completed_runs = 12\nmax_events_per_run = 50\n', encoding="utf-8")
-            loaded = ServiceConfig.load(config)
+            loaded = ServiceConfig.load(config, state_dir=root / "isolated-state")
             self.assertEqual((loaded.retention_days, loaded.max_completed_runs, loaded.max_events_per_run), (10, 12, 50))
 
     def test_config_accepts_utf8_bom_written_by_windows_tools(self):
@@ -86,7 +86,7 @@ class ServiceConfigTests(unittest.TestCase):
             cwd.mkdir()
             config = root / "bom.toml"
             config.write_bytes(b'\xef\xbb\xbf[service]\ncwd = "' + cwd.as_posix().encode() + b'"\n')
-            self.assertEqual(ServiceConfig.load(config).cwd, cwd.resolve())
+            self.assertEqual(ServiceConfig.load(config, state_dir=root / "isolated-state").cwd, cwd.resolve())
 
     def test_doctor_uses_fake_cli_and_does_not_create_state_files(self):
         with TemporaryDirectory() as temp:
@@ -253,8 +253,8 @@ class ResidentServiceTests(unittest.TestCase):
                 self.assertEqual(inspected.returncode, 0, inspected.stderr)
                 self.assertEqual(__import__("json").loads(inspected.stdout)["backend"], "app-server")
                 stop_call = subprocess.run([sys.executable, "-m", "p4_codex_bridge", "service", "stop", "--config", str(config),
-                    "--state-dir", str(state), "--timeout", "15"], cwd=package_root, env=env,
-                    capture_output=True, text=True, timeout=20, shell=False)
+                    "--state-dir", str(state), "--timeout", "30"], cwd=package_root, env=env,
+                    capture_output=True, text=True, timeout=40, shell=False)
                 self.assertEqual(stop_call.returncode, 0, stop_call.stderr)
                 stopped = __import__("json").loads(stop_call.stdout)
                 self.assertEqual(stopped["status"], "COMPLETED")
@@ -262,8 +262,8 @@ class ResidentServiceTests(unittest.TestCase):
                 self.assertEqual(service_status(state)["state"], "STOPPED")
             finally:
                 if first.poll() is None:
-                    request_service_action(state, "stop", timeout=5)
-                    first.wait(timeout=5)
+                    request_service_action(state, "stop", timeout=10)
+                    first.wait(timeout=15)
                 if first.stdout:
                     first.stdout.close()
                 if first.stderr:

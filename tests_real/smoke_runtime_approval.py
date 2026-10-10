@@ -4,8 +4,9 @@ from __future__ import annotations
 import json
 import sys
 import time
-import tempfile
 from pathlib import Path
+
+from portable_tempdirs import temporary_directory
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -34,7 +35,7 @@ def main() -> int:
     started = time.monotonic()
     # Keep runtime SQLite outside the IDE-indexed approval fixture. Only the
     # requested Codex file operation belongs in that workspace.
-    with tempfile.TemporaryDirectory(prefix="p4-approval-state-") as state_dir:
+    with temporary_directory("P4ApprovalState") as state_dir:
         manager = CodexRuntimeManager(cwd=workspace, database_path=Path(state_dir) / "runs.sqlite3",
             lock_path=Path(state_dir) / "runs.lock", approval_timeout_seconds=90)
         approval_id = None

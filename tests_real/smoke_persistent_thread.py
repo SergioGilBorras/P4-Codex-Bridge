@@ -4,8 +4,9 @@ from __future__ import annotations
 import json
 import sys
 import time
-import tempfile
 from pathlib import Path
+
+from portable_tempdirs import temporary_directory
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -37,7 +38,7 @@ def main() -> int:
         print(json.dumps({"auth_available": False, "error": "Codex ChatGPT login is unavailable"}))
         return 2
     started = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="p4-codex-persistent-smoke-") as state_dir:
+    with temporary_directory("P4CodexPersistentSmoke") as state_dir:
         state = Path(state_dir)
         manager = CodexRuntimeManager(cwd=workspace, database_path=state / "runs.sqlite3", max_active_turns=1)
         report = {"cli_version": probe(["--version"], timeout=10).strip(), "workspace": str(workspace),

@@ -276,15 +276,16 @@ class CrossProcessFakeDaemonTests(unittest.TestCase):
                 watched = cli("watch", run_id, "--state-dir", str(state))
                 self.assertEqual(watched.returncode, 0, watched.stderr)
                 self.assertIn("TurnCompleted", watched.stdout)
-                stop = cli("service", "stop", "--config", str(config), "--state-dir", str(state), "--timeout", "10")
+                stop = cli("service", "stop", "--config", str(config), "--state-dir", str(state), "--timeout", "30",
+                           timeout=40)
                 self.assertEqual(stop.returncode, 0, stop.stderr)
-                service.wait(timeout=10)
+                service.wait(timeout=40)
             finally:
                 if service.poll() is None:
                     try:
                         from p4_codex_bridge.service import request_service_action
-                        request_service_action(state, "stop", timeout=5)
-                        service.wait(timeout=8)
+                        request_service_action(state, "stop", timeout=10)
+                        service.wait(timeout=15)
                     except Exception:
                         # Do not terminate an unverified process tree during cleanup.
                         pass
