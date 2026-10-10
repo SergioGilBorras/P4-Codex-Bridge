@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -18,7 +18,7 @@ FAKE_POLICY = RunSecurityPolicy(project_trust=ProjectTrust.TRUSTED, allow_extern
 
 class ServiceClientTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.workspace = self.root / "workspace"
         self.workspace.mkdir()
@@ -45,6 +45,14 @@ class ServiceClientTests(unittest.TestCase):
             self.client.submit_exec_run({"prompt": "x"})
         request = ExecRunSubmission("hola", str(self.workspace), metadata={"agent_name": "Test"}, security_policy=FAKE_POLICY)
         self.assertEqual(request.payload()["metadata"]["agent_name"], "Test")
+        self.assertIs(request.payload()["ephemeral"], True)
+        persistent = ExecRunSubmission("continue later", str(self.workspace), security_policy=FAKE_POLICY,
+                                       ephemeral=False)
+        self.assertIs(persistent.payload()["ephemeral"], False)
+        for invalid in (1, 0, "false", None):
+            with self.subTest(ephemeral=invalid), self.assertRaisesRegex(ValueError, "ephemeral must be a boolean"):
+                ExecRunSubmission("x", str(self.workspace), security_policy=FAKE_POLICY,
+                                  ephemeral=invalid).payload()
 
     @patch("p4_codex_bridge.service_client.read_service_state")
     def test_service_absent_fails_without_starting_daemon(self, state):
@@ -141,7 +149,8 @@ class ServiceClientTests(unittest.TestCase):
         service.exec_bridge = type("Bridge", (), {"start": lambda _self, prompt, **kwargs:
             (received.append((prompt, kwargs)) or type("Run", (), {"bridge_run_id": "br_exec", "status": type("Status", (), {"value": "QUEUED"})()})())})()
         payload = ExecRunSubmission("safe fake", str(self.workspace), metadata={"agent_name": "Fixture"},
-                                    security_policy=FAKE_POLICY).payload()
+                                    output_schema={"type": "object"}, security_policy=FAKE_POLICY,
+                                    ephemeral=False).payload()
         with _connect(self.db_path) as db:
             db.execute("INSERT INTO bridge_runtime_commands(command_id,command_type,submitted_at,submitted_by,payload,idempotency_key,status,claimed_by) VALUES('exec','SUBMIT_EXEC_RUN','2026-01-01','pid',?,'exec','CLAIMED','svc_test')", (json.dumps(payload),))
         service.instance_id = "svc_test"
@@ -151,6 +160,31 @@ class ServiceClientTests(unittest.TestCase):
         self.assertEqual(result.result["bridge_run_id"], "br_exec")
         self.assertEqual(received[0][0], "safe fake")
         self.assertEqual(received[0][1]["metadata"]["agent_name"], "Fixture")
+        self.assertEqual(received[0][1]["output_schema"], {"type": "object"})
+        self.assertIs(received[0][1]["ephemeral"], False)
+
+    def test_service_receiver_revalidates_ephemeral_and_keeps_old_payload_default(self):
+        cfg = ServiceConfig(state_dir=self.state, cwd=self.workspace, log_dir=self.root / "logs", allowed_roots=(self.workspace,))
+        service = ForegroundService(cfg)
+        received = []
+        service.exec_bridge = type("Bridge", (), {"start": lambda _self, prompt, **kwargs:
+            (received.append(kwargs) or type("Run", (), {"bridge_run_id": "br_exec", "status": type("Status", (), {"value": "QUEUED"})()})())})()
+        service.instance_id = "svc_test"
+        base = ExecRunSubmission("safe fake", str(self.workspace), security_policy=FAKE_POLICY).payload()
+        old_client_payload = {key: value for key, value in base.items() if key != "ephemeral"}
+        invalid_payload = {**old_client_payload, "ephemeral": "false"}
+        for command_id, payload in (("old", old_client_payload), ("invalid", invalid_payload)):
+            with _connect(self.db_path) as db:
+                db.execute("INSERT INTO bridge_runtime_commands(command_id,command_type,submitted_at,submitted_by,payload,idempotency_key,status,claimed_by) VALUES(?,?,?,?,?,?,?,?)",
+                    (command_id, "SUBMIT_EXEC_RUN", "2026-01-01", "pid", json.dumps(payload), command_id, "CLAIMED", "svc_test"))
+            service._process_runtime_command({"command_id": command_id, "command_type": "SUBMIT_EXEC_RUN", "payload": json.dumps(payload)})
+        old_result = self.client.wait_command("old", timeout=0)
+        invalid_result = self.client.wait_command("invalid", timeout=0)
+        self.assertEqual(old_result.status, "COMPLETED", old_result.error)
+        self.assertIs(received[0]["ephemeral"], True)
+        self.assertEqual(invalid_result.status, "FAILED")
+        self.assertIn("ephemeral must be a boolean", invalid_result.error)
+        self.assertEqual(len(received), 1)
 
     def test_daemon_revalidates_external_security_policy_before_runtime_call(self):
         cfg = ServiceConfig(state_dir=self.state, cwd=self.workspace, log_dir=self.root / "logs", allowed_roots=(self.workspace,))
@@ -188,7 +222,7 @@ class CrossProcessFakeDaemonTests(unittest.TestCase):
         import sys
         import time
         from p4_codex_bridge.service import service_status
-        with tempfile.TemporaryDirectory(prefix="p4-cross-process-") as temp:
+        with TemporaryDirectory(prefix="p4-cross-process-") as temp:
             root = Path(temp)
             workspace = root / "workspace"
             workspace.mkdir()

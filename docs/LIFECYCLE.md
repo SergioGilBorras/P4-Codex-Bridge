@@ -21,13 +21,34 @@ silently reruns them. See [recovery](RECOVERY.md).
 
 ## One-shot exec
 
-Managed `start()` persists a stable `br_...` ID and queue payload, claims shared capacity/workspace resources atomically, then launches a detached bridge worker that starts exactly one `codex exec` child in the validated cwd. Direct `run()` remains one-shot and bypasses resource scheduling. The worker enforces its turn timeout, drains bounded output, sanitizes the result, and records terminal status. Prompts are sent through a pipe; pending managed payload is deleted on claim or cancellation.
+Managed `start()` synchronously submits a stable `br_...` ID and queue payload, claims shared capacity/workspace resources atomically, then launches a detached bridge worker that starts exactly one `codex exec` child in the validated cwd. Direct `run()` synchronously launches and waits for its one-shot child; it bypasses resource scheduling. Both APIs default to ephemeral execution (`--ephemeral`). The worker enforces its timeout, drains bounded output, sanitizes the result, and records terminal status. Prompts are sent through a pipe; pending managed payload is deleted on claim or cancellation. Temporary cleanup failures after an execution result are reported separately as `TemporaryCleanupDeferred`; they do not overwrite the result, terminal status, or `session_id`.
 
 ```text
 STARTING -> RUNNING -> COMPLETED | FAILED | TIMED_OUT | STOPPED
 ```
 
-`stop()` requests cooperative cancellation and escalates to identity-verified process-tree termination after its grace period. `kill()` is immediate. Only PIDs registered by this bridge can be managed. A worker that exits without a terminal row becomes `ORPHANED`; cannot reattach to a Codex conversation.
+### Persistent exec conversation
+
+Pass `ephemeral=False` to `run()` or `start()` to omit `--ephemeral` for a new
+exec conversation. On success, the worker requires a valid native ID from
+Codex's `thread.started` event and returns it as `RunResult.session_id`. A
+managed caller gets it from `read_result(bridge_run_id).session_id` after the
+run finishes; the registry also exposes the ID in run inspection. If Codex
+returns success without a usable ID, the bridge reports
+`SESSION_ID_UNAVAILABLE` and marks the run failed rather than claiming it can
+be resumed. Existing rows remain compatible because no run-table migration was
+needed.
+
+Call `resume(session_id, prompt, cwd=..., confirm_inherited_permissions=True)`
+to continue that `codex exec` session, including from a new `CodexBridge`
+object. Keep the original workspace and Codex session data available. `cwd` is
+still required, validated and used to launch the resume subprocess; it is not a
+promise to change the workspace stored in the session. This lifecycle is
+separate from app-server `thread/resume`, which reopens a thread and does not
+continue an interrupted turn. Offline fakes prove argv, ID capture, and result
+contracts only; they do not prove live Codex persistence or later resumption.
+
+`stop()` requests cooperative cancellation and escalates to identity-verified process-tree termination after its grace period. `kill()` is immediate. Only PIDs registered by this bridge can be managed. A worker that exits without a terminal row becomes `ORPHANED`; this does not itself reattach the process to a Codex conversation.
 
 ## App-server one-turn lifecycle
 

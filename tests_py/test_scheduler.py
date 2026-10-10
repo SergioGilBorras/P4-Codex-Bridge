@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import threading
 import unittest
 import os
@@ -12,14 +12,14 @@ from p4_codex_bridge.scheduler import ResourceScheduler, RuntimeLimits, canonica
 class SchedulerTests(unittest.TestCase):
     def test_public_exports_hide_scheduler_implementation(self):
         import p4_codex_bridge
-        self.assertEqual(p4_codex_bridge.__version__, "1.1.0")
+        self.assertEqual(p4_codex_bridge.__version__, "1.2.0")
         self.assertFalse(hasattr(p4_codex_bridge, "ResourceScheduler"))
         self.assertFalse(hasattr(p4_codex_bridge, "canonical_workspace"))
         self.assertTrue(hasattr(p4_codex_bridge, "CodexBridge"))
         self.assertTrue(hasattr(p4_codex_bridge, "QueueFullError"))
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.limits = RuntimeLimits(global_max_active=2, app_server_max_active=2, exec_max_active=1,
                                     max_active_threads=4, max_queue_size=100,

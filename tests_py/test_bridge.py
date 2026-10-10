@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import time
 from contextlib import closing
 import unittest
@@ -30,7 +31,7 @@ if args == ["--version"]:
 elif args == ["--help"]:
     print("Usage: codex\nexec app-server login mcp resume agents features --ask-for-approval never on-request")
 elif args == ["exec", "--help"]:
-    print("Usage: codex exec --json --output-schema --output-last-message --skip-git-repo-check --model --sandbox read-only workspace-write danger-full-access --ask-for-approval never on-request -C --ignore-user-config stdin")
+    print("Usage: codex exec --json --ephemeral --output-schema --output-last-message --skip-git-repo-check --model --sandbox read-only workspace-write danger-full-access --ask-for-approval never on-request -C --ignore-user-config stdin")
 elif args[:2] == ["exec", "resume"] and "--help" in args:
     print("Usage: codex exec resume SESSION_ID [PROMPT] --json --output-schema --output-last-message --model -c --ignore-user-config")
 elif args[:2] == ["exec", "fork"] and "--help" in args:
@@ -102,7 +103,9 @@ elif "exec" in args:
         if path:
             with open(path, "w", encoding="utf-8") as output:
                 output.write("broken" if model == "last-malformed" else content)
-    print(json.dumps({"type":"thread.started", "thread_id":"fake-session-123"}), flush=True)
+    if model != "no-session":
+        thread_id = "-invalid-session" if model == "invalid-session" else "fake-session-123"
+        print(json.dumps({"type":"thread.started", "thread_id":thread_id}), flush=True)
     print(json.dumps({"type":"item.completed", "item":{"type":"agent_message", "text":content}}), flush=True)
 else:
     sys.exit(2)
@@ -111,7 +114,7 @@ else:
 
 class BridgeTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory(prefix="p4-codex-test-")
+        self.temp = TemporaryDirectory(prefix="p4-codex-test-")
         self.root = Path(self.temp.name)
         self.state = self.root / "state"
         self.codex = self.root / "fake_codex.py"
@@ -146,6 +149,73 @@ class BridgeTests(unittest.TestCase):
         result = self.bridge.run("hello; $env:SECRET", cwd=self.cwd)
         self.assertTrue(result.ok)
         self.assertIn("hello; $env:SECRET", result.content)
+
+    def test_exec_persistence_is_opt_in_and_result_id_survives_managed_read(self):
+        direct_default = self.bridge.run("default ephemeral", cwd=self.cwd, model="args")
+        default_args = json.loads(direct_default.content.removeprefix("got:"))
+        self.assertEqual(default_args.count("--ephemeral"), 1)
+        self.assertEqual(direct_default.session_id, "fake-session-123")
+
+        direct_persistent = self.bridge.run("persistent", cwd=self.cwd, model="args", ephemeral=False)
+        persistent_args = json.loads(direct_persistent.content.removeprefix("got:"))
+        self.assertNotIn("--ephemeral", persistent_args)
+        self.assertIn("--sandbox", persistent_args)
+        self.assertIn("--ask-for-approval", persistent_args)
+        self.assertEqual(direct_persistent.session_id, "fake-session-123")
+
+        for persistent in (True, False):
+            run = self.bridge.start("managed", cwd=self.cwd, model="args", ephemeral=persistent)
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline and self.bridge.status(run.bridge_run_id).status not in ResourceScheduler.TERMINAL:
+                time.sleep(0.05)
+            self.assertEqual(self.bridge.status(run.bridge_run_id).status, RunStatus.COMPLETED)
+            result = self.bridge.read_result(run.bridge_run_id)
+            self.assertIsNotNone(result)
+            self.assertEqual(result.session_id, "fake-session-123")
+            self.assertEqual(self.bridge.inspect(run.bridge_run_id)["native_session_id"], "fake-session-123")
+            args = json.loads(result.content.removeprefix("got:"))
+            self.assertEqual("--ephemeral" in args, persistent)
+
+    def test_persistent_exec_requires_codex_session_identity(self):
+        for model in ("no-session", "invalid-session"):
+            direct = self.bridge.run("persistent", cwd=self.cwd, model=model, ephemeral=False)
+            self.assertFalse(direct.ok)
+            self.assertEqual(direct.error["code"], "SESSION_ID_UNAVAILABLE")
+            self.assertIsNone(direct.session_id)
+
+        run = self.bridge.start("persistent", cwd=self.cwd, model="no-session", ephemeral=False)
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and self.bridge.status(run.bridge_run_id).status not in ResourceScheduler.TERMINAL:
+            time.sleep(0.05)
+        self.assertEqual(self.bridge.status(run.bridge_run_id).status, RunStatus.FAILED)
+        result = self.bridge.read_result(run.bridge_run_id)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.error["code"], "SESSION_ID_UNAVAILABLE")
+        self.assertIsNone(result.session_id)
+
+    def test_ephemeral_rejects_non_boolean_values_for_direct_and_managed_exec(self):
+        for value in (1, 0, "false", None, [], {}):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "ephemeral must be a boolean"):
+                self.bridge.run("x", cwd=self.cwd, ephemeral=value)
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "ephemeral must be a boolean"):
+                self.bridge.start("x", cwd=self.cwd, ephemeral=value)
+        self.assertEqual(self.bridge.list_runs(), [])
+
+    def test_ephemeral_capability_is_preflighted_for_direct_and_managed_exec(self):
+        self.codex.write_text(FAKE_CODEX.replace(" --ephemeral", ""), encoding="utf-8")
+        self.bridge._capability_probe_cache.clear()
+        capabilities = self.bridge.get_capabilities()["exec"]
+        self.assertFalse(capabilities["ephemeral"])
+        self.assertEqual(capabilities["ephemeral_capability"]["status"], "NOT_SUPPORTED")
+        with self.assertRaisesRegex(CapabilityUnavailableError, "exec.ephemeral"):
+            self.bridge.run("default", cwd=self.cwd)
+        with self.assertRaisesRegex(CapabilityUnavailableError, "exec.ephemeral"):
+            self.bridge.start("default", cwd=self.cwd)
+        self.assertEqual(self.bridge.list_runs(), [])
+
+        # Opting out omits the flag and does not require that CLI capability.
+        result = self.bridge.run("persistent request", cwd=self.cwd, ephemeral=False)
+        self.assertTrue(result.ok)
 
     def test_skip_git_repo_check_direct_exec_is_opt_in_and_argument_safe(self):
         workspace = self.root / "workspace with spaces & brackets"
@@ -363,7 +433,36 @@ class BridgeTests(unittest.TestCase):
     def test_output_last_message_timeout_cleans_temp(self):
         result = self.run_model("timeout", timeout_seconds=0.2, capture_last_message=True)
         self.assertEqual(result.error["code"], "CODEX_TIMEOUT")
-        self.assertFalse(list((self.state / "temp").glob("*.txt")))
+        self.assertEqual(list((self.state / "temp").iterdir()), [])
+
+    def test_managed_schema_and_output_temporaries_live_until_child_finishes(self):
+        run = self.bridge.start(
+            "managed schema", cwd=self.cwd, model="schema", output_schema={"type": "object"},
+            capture_last_message=True,
+        )
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and self.bridge.status(run.bridge_run_id).status not in ResourceScheduler.TERMINAL:
+            time.sleep(0.05)
+        self.assertEqual(self.bridge.status(run.bridge_run_id).status, RunStatus.COMPLETED)
+        result = self.bridge.read_result(run.bridge_run_id)
+        self.assertIsNotNone(result)
+        self.assertTrue(result.ok, result.error)
+        self.assertEqual(list((self.state / "temp").iterdir()), [])
+
+    def test_managed_cancel_cleans_managed_temp_directory(self):
+        run = self.bridge.start(
+            "managed cancel", cwd=self.cwd, model="timeout", timeout_seconds=20,
+            capture_last_message=True,
+        )
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            row = ResourceScheduler(self.bridge.registry.path).get(run.bridge_run_id)
+            if row and row.get("process_pid"):
+                break
+            time.sleep(0.05)
+        self.bridge.cancel(run.bridge_run_id, grace_seconds=2)
+        self.bridge._wait_worker_exit(run.bridge_run_id, timeout=10)
+        self.assertEqual(list((self.state / "temp").iterdir()), [])
 
     def test_secret_redaction_in_structured_output(self):
         result = self.run_model("secret", output_schema={"type": "object"})
@@ -419,9 +518,58 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(result.session_id, "fake-session-123")
         self.assertEqual(self.bridge.list_runs()[0].backend, "codex-exec-resume")
 
+        schema_result = self.bridge.resume(
+            "fake-session-123", "continue with structured output", cwd=self.cwd,
+            model="args", output_schema={"type": "object"},
+            confirm_inherited_permissions=True,
+        )
+        args = json.loads(schema_result.content)
+        self.assertEqual(args[args.index("resume") + 1], "fake-session-123")
+        self.assertIn("--output-schema", args)
+        self.assertNotIn("--ephemeral", args)
+        self.assertNotIn("--sandbox", args)
+        self.assertNotIn("--ask-for-approval", args)
+
+        second_bridge = CodexBridge(
+            state_dir=self.state, allowed_roots=(self.root,), default_timeout_seconds=30,
+            app_server_capability_override=AppServerCapabilitySet(
+                {key: CapabilityStatus.SUPPORTED for key in FEATURE_METHODS}, "fake-schema", "v2"),
+            default_security_policy=RunSecurityPolicy(project_trust=ProjectTrust.TRUSTED,
+                allow_project_config=True, allow_agents=True, allow_skills=True,
+                allow_external_mcps=True, allow_side_effect_mcps=True,
+                explicit_risk_acknowledgement=True, policy_id="offline-fake"),
+        )
+        continued = second_bridge.resume("fake-session-123", "continue from another bridge instance",
+            cwd=self.cwd, model="args", confirm_inherited_permissions=True)
+        continued_args = json.loads(continued.content)
+        self.assertEqual(continued_args[continued_args.index("resume") + 1], "fake-session-123")
+
+    def test_resume_output_schema_is_gated_by_resume_help(self):
+        no_resume_schema = FAKE_CODEX.replace(
+            "Usage: codex exec resume SESSION_ID [PROMPT] --json --output-schema --output-last-message --model -c --ignore-user-config",
+            "Usage: codex exec resume SESSION_ID [PROMPT] --json --output-last-message --model -c --ignore-user-config",
+        )
+        self.codex.write_text(no_resume_schema, encoding="utf-8")
+        self.bridge._capability_probe_cache.clear()
+        with self.assertRaisesRegex(CapabilityUnavailableError, "exec.resume.output_schema"):
+            self.bridge.resume("fake-session-123", "continue", cwd=self.cwd,
+                               output_schema={"type": "object"},
+                               confirm_inherited_permissions=True)
+        self.assertEqual(self.bridge.list_runs(), [])
+
     def test_exec_resume_rejects_unsafe_id_and_reports_process_failure(self):
         with self.assertRaises(ValueError):
             self.bridge.resume("--help", "continue", cwd=self.cwd, confirm_inherited_permissions=True)
+        for invalid_id in (" fake-session-123", "fake-session-123 ", "\nfake-session-123"):
+            with self.subTest(session_id=invalid_id), self.assertRaisesRegex(ValueError, "session_id"):
+                self.bridge.resume(invalid_id, "continue", cwd=self.cwd, confirm_inherited_permissions=True)
+        for invalid_confirmation in (1, "true", "false", None):
+            with self.subTest(confirm_inherited_permissions=invalid_confirmation), self.assertRaisesRegex(ValueError, "confirm_inherited_permissions"):
+                self.bridge.resume("fake-session-123", "continue", cwd=self.cwd,
+                                   confirm_inherited_permissions=invalid_confirmation)
+            with self.subTest(fork_confirmation=invalid_confirmation), self.assertRaisesRegex(ValueError, "confirm_inherited_permissions"):
+                self.bridge.fork("fake-session-123", "continue", cwd=self.cwd,
+                                 confirm_inherited_permissions=invalid_confirmation)
         result = self.bridge.resume(
             "fake-session-123", "continue", cwd=self.cwd, model="nonzero",
             confirm_inherited_permissions=True,
@@ -582,6 +730,8 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(self.bridge.get_version(), "codex-cli fake-1.0")
         capabilities = self.bridge.get_capabilities()
         self.assertTrue(capabilities["exec"]["output_schema"])
+        self.assertTrue(capabilities["exec"]["ephemeral"])
+        self.assertEqual(capabilities["exec"]["ephemeral_capability"]["status"], "SUPPORTED")
         self.assertTrue(capabilities["app_server"]["available"])
 
     def test_advanced_exec_fails_before_spawn_when_installed_capability_is_missing(self):

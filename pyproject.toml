@@ -6,8 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "p4-codex-bridge"
 dynamic = ["version"]
 description = "Shared Python API for Codex CLI execution used by P4 components"
-requires-python = ">=3.10"
-dependencies = ["tomli>=2; python_version < '3.11'"]
+requires-python = ">=3.11"
+dependencies = [
+  "portable-tempdirs @ git+https://github.com/SergioGilBorras/portable-tempdirs.git@8dfe64c5a60b568cfda1c1fdce0cae4bd6cab275",
+]
 
 [project.scripts]
 p4-codex = "p4_codex_bridge.cli:main"

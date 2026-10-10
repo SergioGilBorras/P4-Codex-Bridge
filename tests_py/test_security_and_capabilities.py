@@ -3,8 +3,12 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from portable_tempdirs import temporary_directory
 
 from p4_codex_bridge.app_server_capabilities import (
     AppServerCapabilitySet, AppServerSchemaSnapshot, CapabilityStatus, FEATURE_METHODS,
@@ -19,7 +23,7 @@ from p4_codex_bridge.security import ProjectTrust, RunSecurityPolicy, SecurityDe
 
 class RunSecurityTests(unittest.TestCase):
     def test_direct_and_managed_exec_paths_fail_closed_before_launch(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp)
             bridge = CodexBridge(state_dir=root / "state", allowed_roots=[root])
             with self.assertRaises(RunSecurityRejectedError):
@@ -28,7 +32,7 @@ class RunSecurityTests(unittest.TestCase):
                 bridge.start("x", cwd=root)
 
     def test_runtime_manager_path_fails_closed_before_rpc(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp)
             caps = AppServerCapabilitySet({key: CapabilityStatus.SUPPORTED for key in FEATURE_METHODS}, "fixture")
             manager = CodexRuntimeManager(cwd=root, database_path=root / "runtime.sqlite3", capability_set=caps)
@@ -58,7 +62,7 @@ class RunSecurityTests(unittest.TestCase):
         self.assertTrue(result.warnings)
 
     def test_workspace_context_files_are_detected_within_project_boundary(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp) / "repo"; root.mkdir(); (root / ".git").mkdir()
             cwd = root / "nested"; cwd.mkdir()
             (root / "AGENTS.md").write_text("inert")
@@ -90,7 +94,7 @@ class AppServerPreflightTests(unittest.TestCase):
         self.assertTrue(all(status == CapabilityStatus.UNKNOWN for status in corrupt.statuses.values()))
 
     def test_schema_methods_produce_machine_readable_statuses(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             path = Path(temp) / "schema.json"
             methods = ["thread/start", "turn/start", "turn/steer", "turn/interrupt", "thread/resume",
                        "item/commandExecution/requestApproval", "item/fileChange/requestApproval",
@@ -103,7 +107,7 @@ class AppServerPreflightTests(unittest.TestCase):
         self.assertEqual(result.status("app_server.approvals"), CapabilityStatus.SUPPORTED_WITH_LIMITATIONS)
 
     def test_json_schema_method_const_and_enum_are_normalized_without_text_false_positives(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             path = Path(temp) / "generated.json"
             path.write_text(json.dumps({"properties": {
                 "method": {"const": "thread/start", "description": "not-a-rpc/method"},
@@ -116,7 +120,7 @@ class AppServerPreflightTests(unittest.TestCase):
         self.assertNotIn("not-a-rpc/method", result.schema_snapshot.discovered_methods)
 
     def test_json_schema_method_const_and_enum_are_normalized_without_text_false_positives(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             path = Path(temp) / "generated.json"
             path.write_text(json.dumps({"properties": {
                 "method": {"const": "thread/start", "description": "not-a-rpc/method"},
@@ -140,7 +144,7 @@ class AppServerPreflightTests(unittest.TestCase):
         self.assertEqual(all_requests.status("app_server.approvals"), CapabilityStatus.SUPPORTED)
 
     def test_preflight_invokes_installed_schema_command_and_reads_output(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp)
             fake = root / "fake_codex.py"
             fake.write_text(
@@ -157,8 +161,36 @@ class AppServerPreflightTests(unittest.TestCase):
         self.assertEqual(result.status("app_server.turn.start"), CapabilityStatus.SUPPORTED_WITH_LIMITATIONS)
         self.assertEqual(result.status("app_server.turn.steer"), CapabilityStatus.UNSUPPORTED)
 
+    def test_schema_generation_uses_and_cleans_managed_explicit_parent(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            fake = root / "fake_codex.py"
+            fake.write_text(
+                "import json, pathlib, sys\n"
+                "out = pathlib.Path(sys.argv[sys.argv.index('--out') + 1])\n"
+                "out.mkdir(parents=True, exist_ok=True)\n"
+                "(out / 'rpc.json').write_text(json.dumps({'methods': [\n"
+                " {'method': 'thread/start'}, {'method': 'turn/start'}]}))\n",
+                encoding="utf-8",
+            )
+            owner_paths: list[Path] = []
+            original_factory = temporary_directory
+
+            def tracked_factory(namespace: str, parent=None, **kwargs):
+                owner = original_factory(namespace, parent=parent, **kwargs)
+                owner_paths.append(owner.path)
+                return owner
+
+            with patch("p4_codex_bridge.app_server_capabilities.temporary_directory", tracked_factory), \
+                    patch("p4_codex_bridge.app_server_capabilities.tempfile.gettempdir", return_value=str(root)):
+                result = discover_app_server_capabilities(command=[sys.executable, str(fake)], timeout=3)
+            self.assertEqual(result.source, "GENERATED_LOCAL_SCHEMA")
+            self.assertEqual(len(owner_paths), 1)
+            self.assertFalse(owner_paths[0].exists())
+            self.assertEqual(set(root.iterdir()), {fake})
+
     def test_schema_generator_failure_keeps_features_unknown(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             fake = Path(temp) / "fake_codex.py"
             fake.write_text("import sys; sys.exit(7)\n", encoding="utf-8")
             result = discover_app_server_capabilities(command=[sys.executable, str(fake)], timeout=3)
@@ -166,7 +198,7 @@ class AppServerPreflightTests(unittest.TestCase):
         self.assertTrue(all(status == CapabilityStatus.UNKNOWN for status in result.statuses.values()))
 
     def test_schema_snapshot_is_compact_and_hash_stable(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             path = Path(temp) / "methods.json"
             path.write_text(json.dumps({"methods": [{"method": "thread/start"}, {"method": "turn/start"}]}), encoding="utf-8")
             first = parse_schema_capabilities([path], codex_version="codex-cli 0.160.1")
@@ -187,7 +219,7 @@ class AppServerPreflightTests(unittest.TestCase):
         self.assertEqual(missing.status("app_server.turn.steer"), CapabilityStatus.UNSUPPORTED)
 
     def test_renamed_method_does_not_claim_support_and_extra_method_is_ignored(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             path = Path(temp) / "schema.json"
             path.write_text(json.dumps({"methods": [{"method": "thread/create"},
                 {"method": "turn/start"}, {"method": "future/unknown"}]}), encoding="utf-8")
@@ -197,7 +229,7 @@ class AppServerPreflightTests(unittest.TestCase):
         self.assertNotIn("future/unknown", FEATURE_METHODS)
 
     def test_malformed_and_empty_schema_preserve_unknown(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             malformed = Path(temp) / "bad.json"
             malformed.write_text("{", encoding="utf-8")
             broken = parse_schema_capabilities([malformed])

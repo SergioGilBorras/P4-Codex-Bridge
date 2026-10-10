@@ -2,23 +2,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import signal
 import subprocess
 import sys
 import threading
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from portable_tempdirs import temporary_directory
+
 from .models import RunStatus
 from .registry import RunRegistry
-from .runtime import build_exec_argv, codex_environment, extract_session_id, parse_exec_output, redact, redact_structured
+from .runtime import build_exec_argv, codex_environment, extract_session_id, is_valid_session_id, parse_exec_output, redact, redact_structured
 
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 _STOP_REQUESTED = threading.Event()
+_LOG = logging.getLogger("p4_codex_bridge.worker")
+
+
+class _TemporaryFilePreparationError(RuntimeError):
+    """A sanitized worker result can be produced for an input temp failure."""
 
 
 def _identity(pid: int) -> str:
@@ -95,41 +102,137 @@ def _read_limited(stream: Any, output: bytearray, lock: threading.Lock, exceeded
 
 
 def execute(registry: RunRegistry, run_id: str, request: dict[str, Any]) -> None:
+    """Run one job while owning one authorized, identity-checked temp directory."""
+    raw = registry.raw(run_id)
+    if raw is None:
+        return
+    needs_temp = request.get("output_schema") is not None or bool(request.get("capture_last_message"))
+    if not needs_temp:
+        return _execute_with_temp_directory(registry, run_id, request, None)
+
+    owner = None
+    primary_error: BaseException | None = None
+    execution_context: dict[str, Any] = {}
+    try:
+        temp_parent = Path(request["state_dir"]).resolve() / "temp"
+        temp_parent.mkdir(parents=True, exist_ok=True)
+        owner = temporary_directory("P4CodexWorker", parent=temp_parent.resolve())
+        return _execute_with_temp_directory(registry, run_id, request, Path(owner.name), execution_context)
+    except BaseException as exc:
+        primary_error = exc
+        if owner is None and isinstance(exc, (OSError, ValueError, TypeError)):
+            _LOG.error("managed temporary directory creation failed (category=%s)", type(exc).__name__)
+            _write_failure(
+                raw["result_path"], run_id, "TEMPORARY_STORAGE_UNAVAILABLE",
+                "Bridge could not prepare its temporary workspace",
+            )
+            registry.update(run_id, status=RunStatus.FAILED.value,
+                            last_error="Bridge could not prepare its temporary workspace")
+            return
+        if isinstance(exc, _TemporaryFilePreparationError):
+            _write_failure(
+                raw["result_path"], run_id, "TEMPORARY_FILE_PREPARATION_FAILED",
+                "Bridge could not prepare temporary files",
+            )
+            registry.update(run_id, status=RunStatus.FAILED.value,
+                            last_error="Bridge could not prepare temporary files")
+            return
+        raise
+    finally:
+        if owner is not None:
+            child = execution_context.get("child")
+            if isinstance(child, subprocess.Popen) and child.poll() is None:
+                expected_identity = execution_context.get("process_identity")
+                try:
+                    identity_matches = expected_identity is not None and _identity(child.pid) == expected_identity
+                except OSError:
+                    identity_matches = False
+                if identity_matches:
+                    try:
+                        _terminate_tree(child.pid, force=True)
+                        child.wait(timeout=5)
+                    except (OSError, subprocess.TimeoutExpired) as termination_error:
+                        deferred_owner = owner
+                        owner = None
+                        try:
+                            deferred_owner.detach()
+                        except Exception as detach_error:
+                            termination_error = detach_error
+                        _record_temporary_cleanup_deferred(
+                            registry, run_id, reason="CHILD_TERMINATION_FAILED", error=termination_error,
+                        )
+                else:
+                    # Preserve input/output files if a process cannot be
+                    # proven to remain the process this worker spawned.
+                    deferred_owner = owner
+                    owner = None
+                    detach_error = None
+                    try:
+                        deferred_owner.detach()
+                    except Exception as exc:
+                        detach_error = exc
+                    _record_temporary_cleanup_deferred(
+                        registry, run_id, reason="PROCESS_IDENTITY_UNVERIFIED", error=detach_error,
+                    )
+        if owner is not None:
+            try:
+                owner.cleanup()
+            except Exception as cleanup_error:
+                # The log contains only the structured code and exception type,
+                # never an absolute path, prompt, or file contents.
+                cleanup_code = getattr(cleanup_error, "code", "CLEANUP_FAILED")
+                _LOG.error("managed temporary cleanup failed (code=%s, category=%s)",
+                           cleanup_code, type(cleanup_error).__name__)
+                _record_temporary_cleanup_deferred(
+                    registry, run_id, reason="CLEANUP_FAILED", error=cleanup_error,
+                )
+                if primary_error is None:
+                    # _execute_with_temp_directory has returned, so its result
+                    # and terminal state are authoritative even when cleanup
+                    # could not remove the temporary directory.
+                    pass
+                elif hasattr(primary_error, "add_note"):
+                    primary_error.add_note("managed temporary cleanup also failed; see sanitized worker log")
+
+
+def _execute_with_temp_directory(
+    registry: RunRegistry, run_id: str, request: dict[str, Any], temp_directory: Path | None,
+    execution_context: dict[str, Any] | None = None,
+) -> None:
     raw = registry.raw(run_id)
     if raw is None:
         return
     started = time.monotonic()
     schema_path = None
     last_message_path = None
-    temporary_paths: list[str] = []
-
-    def cleanup_temporary_files() -> None:
-        for item in temporary_paths:
-            Path(item).unlink(missing_ok=True)
-
-    if request.get("output_schema") is not None:
-        schema_dir = Path(request["state_dir"]) / "temp"
-        schema_dir.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".json", dir=schema_dir, delete=False) as schema_file:
-            json.dump(request["output_schema"], schema_file, ensure_ascii=False)
-            schema_path = schema_file.name
-            temporary_paths.append(schema_path)
-    if request.get("capture_last_message"):
-        temp_dir = Path(request["state_dir"]) / "temp"
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".txt", dir=temp_dir, delete=False) as output_file:
-            last_message_path = output_file.name
-            temporary_paths.append(last_message_path)
-        Path(last_message_path).unlink()
+    if request.get("output_schema") is not None or request.get("capture_last_message"):
+        if temp_directory is None:
+            raise RuntimeError("managed temporary directory is required for temporary files")
+    execution_context = execution_context if execution_context is not None else {}
+    try:
+        if request.get("output_schema") is not None:
+            schema_file_path = temp_directory / "output-schema.json"
+            with schema_file_path.open("x", encoding="utf-8") as schema_file:
+                json.dump(request["output_schema"], schema_file, ensure_ascii=False)
+            schema_path = str(schema_file_path)
+        if request.get("capture_last_message"):
+            # Preserve the CLI's expected absent output path while allocating
+            # it exclusively inside the managed directory.
+            last_message_file_path = temp_directory / "last-message.txt"
+            last_message_path = str(last_message_file_path)
+            with last_message_file_path.open("x", encoding="utf-8"):
+                pass
+            last_message_file_path.unlink()
+    except OSError as exc:
+        _LOG.error("temporary file preparation failed (category=%s)", type(exc).__name__)
+        raise _TemporaryFilePreparationError("temporary file preparation failed") from exc
     try:
         argv = build_exec_argv(request, schema_path, last_message_path)
     except FileNotFoundError:
-        cleanup_temporary_files()
         _write_failure(raw["result_path"], run_id, "CODEX_NOT_FOUND", "Codex executable not found")
         registry.update(run_id, status=RunStatus.FAILED.value, last_error="Codex executable not found")
         return
     except (TypeError, ValueError):
-        cleanup_temporary_files()
         _write_failure(raw["result_path"], run_id, "CODEX_REQUEST_INVALID", "Codex operation request is invalid")
         registry.update(run_id, status=RunStatus.FAILED.value, last_error="Codex operation request is invalid")
         return
@@ -151,16 +254,16 @@ def execute(registry: RunRegistry, run_id: str, request: dict[str, Any]) -> None
     try:
         child = subprocess.Popen(**options)
     except FileNotFoundError:
-        cleanup_temporary_files()
         registry.update(run_id, status=RunStatus.FAILED.value, exit_code=None, last_error="Codex executable not found")
         return
     except OSError:
-        cleanup_temporary_files()
         registry.update(run_id, status=RunStatus.FAILED.value, exit_code=None, last_error="Codex could not be started")
         return
+    execution_context["child"] = child
 
     try:
         child_identity = _identity(child.pid)
+        execution_context["process_identity"] = child_identity
         registry.update(run_id, pid=child.pid, pid_identity=child_identity, status=RunStatus.RUNNING.value)
         if request.get("managed_scheduled"):
             from .scheduler import ResourceScheduler
@@ -168,7 +271,6 @@ def execute(registry: RunRegistry, run_id: str, request: dict[str, Any]) -> None
         registry.add_run_event(run_id, "ResourceAcquired", {"backend": "exec", "pid": child.pid})
     except OSError:
         child.kill()
-        cleanup_temporary_files()
         registry.update(run_id, status=RunStatus.FAILED.value, last_error="Could not verify child process identity")
         return
 
@@ -183,7 +285,7 @@ def execute(registry: RunRegistry, run_id: str, request: dict[str, Any]) -> None
         kind = event.get("type")
         if kind == "thread.started":
             native_id = event.get("thread_id")
-            if isinstance(native_id, str):
+            if is_valid_session_id(native_id):
                 registry.update(run_id, session_id=native_id, thread_id=native_id)
                 if request.get("managed_scheduled"):
                     from .scheduler import ResourceScheduler
@@ -279,6 +381,11 @@ def execute(registry: RunRegistry, run_id: str, request: dict[str, Any]) -> None
         error, error_code, terminal = "Codex did not create the requested last-message file", "OUTPUT_LAST_MESSAGE_MISSING", RunStatus.FAILED
     elif not content.strip():
         error, error_code, terminal = "Codex returned no final message", "CODEX_EMPTY_RESPONSE", RunStatus.FAILED
+    session_id = extract_session_id(bytes(stdout))
+    if terminal == RunStatus.COMPLETED and not request.get("ephemeral", True) and not session_id:
+        error = "Codex completed without a reusable session ID"
+        error_code = "SESSION_ID_UNAVAILABLE"
+        terminal = RunStatus.FAILED
     result = {
         "ok": terminal == RunStatus.COMPLETED and error is None,
         "bridge_run_id": run_id,
@@ -286,7 +393,7 @@ def execute(registry: RunRegistry, run_id: str, request: dict[str, Any]) -> None
         "content": redact(content),
         "stderr": redact(bytes(stderr).decode("utf-8", "replace").strip()),
         "structured_output": redact_structured(structured),
-        "session_id": extract_session_id(bytes(stdout)),
+        "session_id": session_id,
         "raw_output": redact(bytes(stdout).decode("utf-8", "replace")) if request.get("include_raw_output") else None,
         "error": {"code": error_code, "message": redact(error)} if error else None,
         "duration_ms": int((time.monotonic() - started) * 1000),
@@ -296,7 +403,6 @@ def execute(registry: RunRegistry, run_id: str, request: dict[str, Any]) -> None
     temporary_result = result_path.with_suffix(".tmp")
     temporary_result.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     temporary_result.replace(result_path)
-    cleanup_temporary_files()
     registry.update(
         run_id,
         status=terminal.value,
@@ -322,6 +428,26 @@ def _write_failure(result_path: str, run_id: str, code: str, message: str) -> No
         "content": "", "stderr": "", "structured_output": None,
         "error": {"code": code, "message": message}, "duration_ms": 0,
     }), encoding="utf-8")
+
+
+def _record_temporary_cleanup_deferred(
+    registry: RunRegistry, run_id: str, *, reason: str, error: BaseException | None = None,
+) -> None:
+    """Record a sanitized cleanup warning without changing the run result."""
+    code = getattr(error, "code", "CLEANUP_DEFERRED") if error is not None else "IDENTITY_UNVERIFIED"
+    if not isinstance(code, str) or not code.isascii() or not code.replace("_", "").isalnum():
+        code = "CLEANUP_DEFERRED"
+    category = type(error).__name__ if error is not None else "ProcessIdentityUnavailable"
+    payload = {"reason": reason, "code": code[:64], "category": category[:64]}
+    _LOG.warning("TemporaryCleanupDeferred (reason=%s, code=%s, category=%s)",
+                 payload["reason"], payload["code"], payload["category"])
+    try:
+        registry.add_run_event(run_id, "TemporaryCleanupDeferred", payload)
+    except Exception as event_error:
+        # Event persistence is diagnostic only and must not replace the run's
+        # already persisted result or its original execution failure.
+        _LOG.error("TemporaryCleanupDeferred event persistence failed (category=%s)",
+                   type(event_error).__name__)
 
 
 def main() -> int:

@@ -16,6 +16,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Iterable
 
+from portable_tempdirs import temporary_directory
+
 from .runtime import codex_environment, resolve_codex_command
 
 
@@ -270,7 +272,9 @@ def discover_app_server_capabilities(*, command: list[str] | None = None, timeou
                 version_text = version_result.stdout.strip() or version_result.stderr.strip() or None
         except (OSError, subprocess.TimeoutExpired):
             pass
-        with tempfile.TemporaryDirectory(prefix="p4-codex-schema-") as tmp:
+        # Keep generated schema data in the established system-temp parent.
+        # The library fails closed there; it does not switch to another root.
+        with temporary_directory("P4CodexSchema", parent=Path(tempfile.gettempdir())) as tmp:
             output = Path(tmp)
             result = subprocess.run(selected + ["app-server", "generate-json-schema", "--out", str(output), "--experimental"],
                                     capture_output=True, text=True, timeout=timeout, shell=False,

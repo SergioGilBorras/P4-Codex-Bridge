@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -27,7 +27,7 @@ def main() -> int:
         "error": None,
     }
     try:
-        with tempfile.TemporaryDirectory(prefix="p4-codex-smoke-", dir=workspace) as state_dir:
+        with TemporaryDirectory(prefix="p4-codex-smoke-", dir=workspace) as state_dir:
             bridge = CodexBridge(state_dir=state_dir, allowed_roots=(workspace,))
             result_data["version"] = bridge.get_version()
             if not authenticated:

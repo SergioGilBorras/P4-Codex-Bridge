@@ -13,13 +13,14 @@ Tests run with the intended Python interpreter. Windows launcher diagnostics req
 
 | Source | Scope |
 |---|---|
-| `tests_py/test_bridge.py` | Direct/managed exec, `skip_git_repo_check` opt-in, capability gating, stdin safety, timeouts, outputs and process control |
-| `tests_py/test_public_api.py` | Package-root export boundary and typed, closed public signatures |
+| `tests_py/test_bridge.py` | Direct/managed exec, ephemeral/persistent session arguments and IDs, persistent ID failure, resume identity/schema gates, `skip_git_repo_check`, capability gating, stdin safety, timeouts, outputs and process control |
+| `tests_py/test_public_api.py` | Package-root export boundary and typed, closed public signatures, including `ephemeral` |
 | `tests_py/test_scheduler.py` | SQLite queue, limits, locks, managed dispatch and recovery |
 | `tests_py/test_runtime_manager.py`, `test_app_server_events.py` | Experimental JSON-RPC manager, lifecycle, streams and approvals |
 | `tests_py/test_security_and_capabilities.py` | Project trust, MCP risk, fail-closed policy and capability classification |
-| `tests_py/test_service.py`, `test_service_client.py` | Foreground service, typed requests, same-user IPC and status |
+| `tests_py/test_service.py`, `test_service_client.py` | Foreground service, typed exec persistence requests and receiver revalidation, same-user IPC and status |
 | `tests_py/test_cli_contract.py`, `test_compatibility.py` | CLI protocol and compatibility diagnostics |
+| `tests_py/test_temporary_directories.py` | portable-tempdirs ownership, explicit-parent fail-closed behavior, worker partial-setup cleanup, post-result cleanup deferral, sanitized event persistence, session ID/result preservation, and persistent-state preservation |
 | `tests_py/test_windows_cmd_launcher.py`, `test_windows_launcher_install.py` | Supported wrapper, packaging and opt-in Windows launcher diagnostics |
 | `tests_py/test_smoke_scripts.py` | Manual smoke script contracts without executing live model requests |
 

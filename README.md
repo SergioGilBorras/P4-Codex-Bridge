@@ -2,11 +2,11 @@
 
 P4-Codex-Bridge is a Python interface and operator CLI for the locally installed OpenAI Codex CLI. It uses the user's existing Codex authentication and provides execution controls, lifecycle tracking, observability, and experimental app-server integrations.
 
-**Current source version: 1.1.0.** This repository is a Python implementation; no Node.js bridge runtime or JavaScript API is provided. Node.js may still be required by a particular Codex CLI installation.
+**Current source version: 1.2.0 (development, not published).** This repository is a Python implementation; no Node.js bridge runtime or JavaScript API is provided. Node.js may still be required by a particular Codex CLI installation.
 
 ## What works today
 
-- Synchronous `CodexBridge.run()` and managed queued `CodexBridge.start()` execute `codex exec`. Prompts are passed on stdin, never interpolated into a shell command.
+- Synchronous direct `CodexBridge.run()` and managed queued `CodexBridge.start()` execute `codex exec`. Both are ephemeral by default; set `ephemeral=False` to request a session that can be reused with `resume()`. Prompts are passed on stdin, never interpolated into a shell command.
 - `skip_git_repo_check=True` is supported by `run()` and `start()` for existing non-Git directories when the installed CLI advertises `--skip-git-repo-check`. Default: `False`.
 - `cwd` validation, optional `allowed_roots`, sandbox/approval settings, timeouts, model options, structured output, final-message capture and safe result handling.
 - A shared SQLite scheduler for managed exec jobs and resident app-server turns, with resource limits, workspace locks, cancellation and local run discovery. Direct `run()` calls do not use the scheduler.
@@ -18,7 +18,8 @@ P4-Codex-Bridge is a Python interface and operator CLI for the locally installed
 
 ## Requirements
 
-- Python 3.10+.
+- Python 3.11+ (the 1.2.0 development line drops the previous Python 3.10 support).
+- `portable-tempdirs` is pinned to an immutable upstream Git commit for managed temporary directories; see [installation](docs/INSTALLATION.md) for Git/offline and publication constraints.
 - An installed Codex CLI and authentication through its supported login mechanism.
 - A real, existing `cwd` for Codex calls; creating a new directory or a Git repository is not a bridge requirement.
 - Installation into a selected Python environment. The bridge does not require `OPENAI_API_KEY` and does not perform a direct Responses API call.
@@ -54,6 +55,29 @@ The example illustrates the API, not a guarantee that an untrusted project or an
     print(result.content if result.ok else result.error)
 
 `skip_git_repo_check` only bypasses the CLI Git-context check; it does **not** change sandbox, filesystem read visibility, allowed roots, approvals, MCP configuration, or Codex authentication. `CodexBridge.resume()`, `fork()`, `review()` and service-client/CLI submissions have separate contracts.
+
+To continue an exec conversation, opt out of ephemeral mode and retain the
+returned Codex session ID. Direct `run()` returns it in `RunResult.session_id`;
+managed `start()` exposes it after completion through `read_result()` (and run
+inspection). This requests Codex's non-ephemeral mode; the fake suite verifies
+argument/result handling, not live retention. Then reuse the same workspace:
+
+    first = bridge.run("Reply exactly: A", cwd=root, ephemeral=False)
+    if not first.ok or not first.session_id:
+        raise RuntimeError(first.error or "Codex did not return a reusable session ID")
+    continued = bridge.resume(
+        first.session_id,
+        "Reply exactly: B",
+        cwd=root,
+        confirm_inherited_permissions=True,
+    )
+
+`resume()` continues the stored Codex exec session and inherits its original
+permission policy. The explicit confirmation is required; `cwd` remains
+validated and is used to launch the process, but does not guarantee changing
+the session's stored workspace. Keep the workspace and Codex session data if
+you intend to resume. See [Python API](docs/PYTHON_API.md) for managed/service
+examples and error handling.
 
 ## Operator CLI
 

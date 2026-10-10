@@ -45,7 +45,7 @@ class PublicApiFreezeTests(unittest.TestCase):
         parameters = inspect.signature(bridge.CodexBridge.run).parameters
         self.assertEqual(list(parameters), [
             "self", "prompt", "cwd", "profile", "model", "timeout_seconds", "permissions",
-            "reasoning_effort", "reasoning_summary", "verbosity", "output_schema",
+            "reasoning_effort", "reasoning_summary", "verbosity", "output_schema", "ephemeral",
             "skip_git_repo_check", "capture_last_message", "include_raw_output", "config_policy", "config_overrides",
             "metadata", "announce_run", "security_policy",
         ])
@@ -55,6 +55,12 @@ class PublicApiFreezeTests(unittest.TestCase):
         for method in (bridge.CodexBridge.run, bridge.CodexBridge.start):
             parameter = inspect.signature(method).parameters["skip_git_repo_check"]
             self.assertEqual(parameter.default, False)
+            self.assertIn(str(parameter.annotation), {"bool", "<class 'bool'>"})
+
+    def test_run_and_start_ephemeral_option_is_typed_and_enabled_by_default(self):
+        for method in (bridge.CodexBridge.run, bridge.CodexBridge.start):
+            parameter = inspect.signature(method).parameters["ephemeral"]
+            self.assertEqual(parameter.default, True)
             self.assertIn(str(parameter.annotation), {"bool", "<class 'bool'>"})
 
     def test_public_runtime_manager_remains_internal(self):

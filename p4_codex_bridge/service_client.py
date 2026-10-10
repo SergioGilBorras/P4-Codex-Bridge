@@ -45,10 +45,13 @@ class ExecRunSubmission:
     permissions: CodexPermissions | None = None
     output_schema: dict[str, Any] | None = None
     security_policy: RunSecurityPolicy = RunSecurityPolicy()
+    ephemeral: bool = True
 
     def payload(self) -> dict[str, Any]:
         if not isinstance(self.prompt, str) or not self.prompt.strip() or len(self.prompt.encode("utf-8")) > MAX_PROMPT_BYTES:
             raise ValueError("prompt is required and must not exceed 512 KiB")
+        if type(self.ephemeral) is not bool:
+            raise ValueError("ephemeral must be a boolean")
         root = Path(self.cwd).expanduser()
         if not root.is_absolute() or not root.is_dir():
             raise ValueError("cwd must be an absolute existing directory")
@@ -84,6 +87,7 @@ class ExecRunSubmission:
             "config_policy": self.config_policy, "metadata": metadata,
             "resource_priority": self.resource_priority, "access_mode": self.access_mode,
             "permissions": permissions, "output_schema": self.output_schema}
+        payload["ephemeral"] = self.ephemeral
         payload["security_policy"] = self.security_policy.to_dict()
         _check_payload_size(payload)
         return payload

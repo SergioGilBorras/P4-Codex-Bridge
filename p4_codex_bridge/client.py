@@ -8,7 +8,6 @@ import queue
 import re
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import uuid
@@ -29,7 +28,7 @@ from .security import RunSecurityPolicy, validate_run_security
 from .app_server_capabilities import AppServerCapabilitySet, discover_app_server_capabilities
 from .profiles import PROFILES, get_profile
 from .registry import RunRegistry
-from .runtime import codex_environment, probe, redact, resolve_codex_command
+from .runtime import codex_environment, is_valid_session_id, probe, redact, resolve_codex_command
 
 
 class CodexBridge:
@@ -174,8 +173,19 @@ class CodexBridge:
         output = self._capability_probe_cache[key]
         supported = "Usage:" in output and (flag is None or flag in output)
         if not supported:
-            requested = f"exec.{operation}" if operation in {"resume", "fork", "review"} else f"exec.{flag.lstrip('-').replace('-', '_')}"
+            feature = flag.lstrip("-").replace("-", "_") if flag else None
+            requested = f"exec.{operation}.{feature}" if operation in {"resume", "fork", "review"} and feature else (
+                f"exec.{operation}" if operation in {"resume", "fork", "review"} else f"exec.{feature}"
+            )
             raise CapabilityUnavailableError(f"Codex capability {requested} is not exposed by the installed CLI")
+
+    def _preflight_ephemeral_flag(self) -> None:
+        """Check the flag when Codex exists; preserve normal missing-CLI results."""
+        try:
+            self._require_exec_capability("run", flag="--ephemeral")
+        except FileNotFoundError:
+            # The launch path reports CODEX_NOT_FOUND as a normal RunResult.
+            return
 
     def get_capabilities(self) -> dict[str, Any]:
         root_help = probe(["--help"])
@@ -212,6 +222,7 @@ class CodexBridge:
             "json_events": "--json" in exec_help,
             "output_schema": "--output-schema" in exec_help,
             "output_last_message": "--output-last-message" in exec_help,
+            "ephemeral": "--ephemeral" in exec_help,
             "skip_git_repo_check": "--skip-git-repo-check" in exec_help,
             "stdin_prompt": "stdin" in exec_help.lower(),
             "sandbox": [mode.value for mode in SandboxMode if mode.value in exec_help],
@@ -224,6 +235,7 @@ class CodexBridge:
         exec_capabilities.update({
             "structured_output_capability": capability("--output-schema" in exec_help, cli_source),
             "last_message_capability": capability("--output-last-message" in exec_help, cli_source),
+            "ephemeral_capability": capability("--ephemeral" in exec_help, cli_source),
             "skip_git_repo_check_capability": capability("--skip-git-repo-check" in exec_help, cli_source),
             "writable_roots_capability": capability("--add-dir" in exec_help, cli_source, notes=("CLI --add-dir is an additional writable directory; bridge still validates roots.",)),
             "reasoning_effort": capability(True, "installed model/list metadata; selected values are model-specific"),
@@ -853,6 +865,7 @@ class CodexBridge:
         reasoning_summary: ReasoningSummary | str | None = None,
         verbosity: ModelVerbosity | str | None = None,
         output_schema: dict[str, Any] | None = None,
+        ephemeral: bool = True,
         skip_git_repo_check: bool = False,
         capture_last_message: bool = False,
         include_raw_output: bool = False,
@@ -869,11 +882,14 @@ class CodexBridge:
             prompt, cwd=cwd, profile=profile, model=model, timeout_seconds=timeout_seconds,
             permissions=permissions, reasoning_effort=reasoning_effort,
             reasoning_summary=reasoning_summary, verbosity=verbosity, output_schema=output_schema,
+            ephemeral=ephemeral,
             skip_git_repo_check=skip_git_repo_check,
             capture_last_message=capture_last_message, include_raw_output=include_raw_output,
             config_policy=config_policy, config_overrides=config_overrides,
             security_policy=security_policy,
         )
+        if ephemeral:
+            self._preflight_ephemeral_flag()
         if skip_git_repo_check:
             self._require_exec_capability("run", flag="--skip-git-repo-check")
         if not isinstance(announce_run, bool): raise ValueError("announce_run must be boolean")
@@ -925,6 +941,7 @@ class CodexBridge:
         reasoning_summary: ReasoningSummary | str | None = None,
         verbosity: ModelVerbosity | str | None = None,
         output_schema: dict[str, Any] | None = None,
+        ephemeral: bool = True,
         skip_git_repo_check: bool = False,
         capture_last_message: bool = False,
         include_raw_output: bool = False,
@@ -934,15 +951,20 @@ class CodexBridge:
         announce_run: bool = False,
         security_policy: RunSecurityPolicy | None = None,
     ) -> BridgeRun:
+        if type(ephemeral) is not bool:
+            raise ValueError("ephemeral must be a boolean")
         if output_schema is not None:
             self._require_exec_capability("run", flag="--output-schema")
         if capture_last_message:
             self._require_exec_capability("run", flag="--output-last-message")
+        if ephemeral:
+            self._preflight_ephemeral_flag()
         request = self._validate_request(
             prompt, cwd=cwd, profile=profile, model=model,
             timeout_seconds=timeout_seconds, permissions=permissions,
             reasoning_effort=reasoning_effort, reasoning_summary=reasoning_summary,
             verbosity=verbosity, output_schema=output_schema,
+            ephemeral=ephemeral,
             skip_git_repo_check=skip_git_repo_check,
             capture_last_message=capture_last_message, include_raw_output=include_raw_output,
             config_policy=config_policy, config_overrides=config_overrides,
@@ -1055,6 +1077,7 @@ class CodexBridge:
         reasoning_summary: ReasoningSummary | str | None = None,
         verbosity: ModelVerbosity | str | None = None,
         output_schema: dict[str, Any] | None = None,
+        ephemeral: bool = True,
         skip_git_repo_check: bool = False,
         capture_last_message: bool = False,
         include_raw_output: bool = False,
@@ -1072,6 +1095,7 @@ class CodexBridge:
             "timeout_seconds": timeout_seconds, "permissions": permissions,
             "reasoning_effort": reasoning_effort, "reasoning_summary": reasoning_summary,
             "verbosity": verbosity, "output_schema": output_schema,
+            "ephemeral": ephemeral,
             "skip_git_repo_check": skip_git_repo_check,
             "capture_last_message": capture_last_message, "include_raw_output": include_raw_output,
             "config_policy": config_policy, "config_overrides": config_overrides,
@@ -1106,10 +1130,12 @@ class CodexBridge:
     ) -> dict[str, Any]:
         if operation not in {"resume", "fork", "review"}:
             raise ValueError("unsupported advanced Codex operation")
+        if type(confirm_inherited_permissions) is not bool:
+            raise ValueError("confirm_inherited_permissions must be a boolean")
         if operation in {"resume", "fork"}:
-            if not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 255 or session_id.startswith("-") or any(ord(ch) < 32 for ch in session_id):
+            if not is_valid_session_id(session_id):
                 raise ValueError("session_id must be a UUID or safe Codex thread name")
-            if not confirm_inherited_permissions:
+            if confirm_inherited_permissions is not True:
                 raise ValueError("confirm_inherited_permissions=True is required because exec resume/fork restore session policy")
         if operation in {"resume", "fork"} and (not isinstance(prompt, str) or not prompt.strip()):
             raise ValueError("prompt is required for exec resume/fork")
@@ -1149,9 +1175,9 @@ class CodexBridge:
     def _run_advanced(self, request: dict[str, Any]) -> RunResult:
         self._require_exec_capability(request["operation"])
         if request.get("output_schema") is not None:
-            self._require_exec_capability("run", flag="--output-schema")
+            self._require_exec_capability(request["operation"], flag="--output-schema")
         if request.get("capture_last_message"):
-            self._require_exec_capability("run", flag="--output-last-message")
+            self._require_exec_capability(request["operation"], flag="--output-last-message")
         record = self._launch_request(request, profile="analysis")
         return self._collect_result(record, request["timeout_seconds"])
 
@@ -1479,6 +1505,7 @@ class CodexBridge:
         include_raw_output: bool,
         config_policy: str | None,
         config_overrides: dict[str, Any] | None,
+        ephemeral: bool = True,
         skip_git_repo_check: bool = False,
         security_policy: RunSecurityPolicy | None = None,
     ) -> dict[str, Any]:
@@ -1497,6 +1524,8 @@ class CodexBridge:
         verbosity_value = ModelVerbosity(verbosity).value if verbosity is not None else None
         if not isinstance(capture_last_message, bool) or not isinstance(include_raw_output, bool):
             raise ValueError("capture_last_message and include_raw_output must be booleans")
+        if type(ephemeral) is not bool:
+            raise ValueError("ephemeral must be a boolean")
         if type(skip_git_repo_check) is not bool:
             raise ValueError("skip_git_repo_check must be a boolean")
         if output_schema is not None and not isinstance(output_schema, dict):
@@ -1577,6 +1606,7 @@ class CodexBridge:
             "writable_roots": [str(path) for path in roots],
             "network_access": network_access,
             "output_schema": output_schema,
+            "ephemeral": ephemeral,
             "skip_git_repo_check": skip_git_repo_check,
             "capture_last_message": capture_last_message,
             "include_raw_output": include_raw_output,

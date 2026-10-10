@@ -64,10 +64,7 @@ class ServiceConfig:
         selected = Path(os.path.expandvars(str(path))).expanduser().resolve() if path else None
         if selected and selected.is_file():
             try:
-                try:
-                    import tomllib
-                except ImportError:  # Python 3.10
-                    import tomli as tomllib  # type: ignore[no-redef]
+                import tomllib
                 content = selected.read_bytes()
                 if content.startswith(b"\xef\xbb\xbf"):
                     content = content[3:]
@@ -446,16 +443,19 @@ class ForegroundService:
                 access_mode = payload.pop("access_mode")
                 resource_priority = payload.pop("resource_priority")
                 output_schema = payload.pop("output_schema")
+                ephemeral = payload.pop("ephemeral", True)
                 if payload:
                     raise ValueError("unknown exec submission fields")
                 validated = ExecRunSubmission(prompt=prompt, cwd=cwd, profile=profile, model=model,
                     timeout_seconds=timeout_seconds, config_policy=config_policy, metadata=metadata,
                     access_mode=access_mode, resource_priority=resource_priority,
-                    permissions=permissions, output_schema=output_schema, security_policy=security_policy).payload()
+                    permissions=permissions, output_schema=output_schema, ephemeral=ephemeral,
+                    security_policy=security_policy).payload()
                 record = self.exec_bridge.start(validated["prompt"], cwd=validated["cwd"], profile=validated["profile"],
                     model=validated["model"], timeout_seconds=validated["timeout_seconds"],
                     config_policy=validated["config_policy"], metadata=validated["metadata"],
                     permissions=permissions, output_schema=validated["output_schema"],
+                    ephemeral=validated["ephemeral"],
                     access_mode=validated["access_mode"], resource_priority=validated["resource_priority"],
                     security_policy=security_policy)
                 result = {"bridge_run_id": record.bridge_run_id, "status": record.status.value, "backend": "exec"}

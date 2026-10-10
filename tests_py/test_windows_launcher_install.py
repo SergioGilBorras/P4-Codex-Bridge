@@ -6,7 +6,7 @@ import ctypes
 import struct
 import subprocess
 import sys
-import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
 
@@ -112,7 +112,7 @@ class WindowsWheelLauncherTests(unittest.TestCase):
     def test_wheel_console_commands_exit_and_venv_is_removable(self):
         from p4_codex_bridge import __version__
         project = Path(__file__).resolve().parents[1]
-        temp = tempfile.TemporaryDirectory(prefix="p4-codex-launcher-")
+        temp = TemporaryDirectory(prefix="p4-codex-launcher-")
         root = Path(temp.name)
         wheelhouse = root / "wheelhouse"
         wheelhouse.mkdir()

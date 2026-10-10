@@ -3,7 +3,7 @@
 ## Public surface and stability
 
 Consumers should import contracts only from `p4_codex_bridge`. Its explicit
-package-root allowlist remains the stable public boundary in 1.1. `CodexBridge` is the
+package-root allowlist remains the stable public boundary in 1.2. `CodexBridge` is the
 in-process facade; `CodexServiceClient` is the stable boundary for a separate
 process submitting work to the resident service. Protocol-specific lifecycle
 operations remain experimental where they depend on evolving app-server RPCs.
@@ -11,7 +11,7 @@ operations remain experimental where they depend on evolving app-server RPCs.
 | Component | Classification | Consumer guidance |
 |---|---|---|
 | `CodexBridge` | STABLE for typed exec operations, managed scheduled `start`, discovery, inspection and cancellation; app-server-specific methods remain experimental | Preferred in-process facade. |
-| `CodexServiceClient` | STABLE for availability check, typed submit/create/start, command wait, inspect/watch and cancel | Preferred cross-process submission and run-observation boundary. Service health/status and approval resolution are CLI operations in 1.1. |
+| `CodexServiceClient` | STABLE for availability check, typed submit/create/start, command wait, inspect/watch and cancel | Preferred cross-process submission and run-observation boundary. `ExecRunSubmission.ephemeral` defaults to `True`; persistent exec session IDs are visible through run inspection after the worker records them. |
 | `CodexRuntimeManager` | INTERNAL | Runtime implementation; not a consumer import path. |
 | Runtime limits | EXPERIMENTAL service TOML configuration | SQLite scheduler types are internal and not exported at package root. |
 | scheduler / `ResourceScheduler` | INTERNAL | SQLite queue implementation; do not import it from consumers. |
@@ -57,12 +57,14 @@ execution and does not wait in that queue. `CodexBridge.cancel` is the shared
 cancel entry point; active app-server cancellation is delivered to the owning
 runtime manager through the local SQLite control-request table.
 `run(prompt, *, cwd, profile, model, timeout_seconds, permissions,
-reasoning_effort, reasoning_summary, verbosity, output_schema,
+reasoning_effort, reasoning_summary, verbosity, output_schema, ephemeral=True,
 skip_git_repo_check=False, capture_last_message, include_raw_output,
 config_policy, config_overrides, metadata, announce_run, security_policy)` is
-closed and rejects unknown keywords. `start()` accepts the same
-`skip_git_repo_check=False` option for managed/scheduled exec. Stable APIs are
-synchronous; `watch` is a synchronous iterator.
+closed and rejects unknown keywords. `start()` accepts the same `ephemeral=True`
+and `skip_git_repo_check=False` options for managed/scheduled exec. `run()` is
+synchronous direct execution; `start()` synchronously submits work to the
+managed queue and returns a `BridgeRun` while its worker executes. `watch` is a
+synchronous iterator.
 Async `awatch`/event streaming and app-server lifecycle APIs are experimental.
 `CodexBridge.recover_exec_runs()` reconciles owned worker identities and accepts
 only a structurally valid result file matching the bridge run ID. It marks
@@ -86,8 +88,8 @@ EXPERIMENTAL until verified against the supported CLI range. Model/config,
 MCP, skill and capability diagnostics; `format_run_announcement`; `awatch`;
 and app-server stream/approval methods are EXPERIMENTAL.
 
-`start()` is the managed/scheduled `exec` path; `run()` deliberately retains
-the direct one-shot path. App-server turns and scheduled exec runs share the
+`start()` is the managed/scheduled `exec` path; `run()` is synchronous direct
+execution and deliberately bypasses the scheduler. App-server turns and scheduled exec runs share the
 same global/backend/profile limits and workspace locks. `cancel()` cancels
 queued jobs before launch, signals managed exec workers with an identity-checked
 termination fallback, and routes app-server interruption to its owner. The
@@ -100,6 +102,65 @@ termination for active work. `interrupt` asks an active app-server turn to stop
 while retaining its thread when supported. `stop` requests cooperative
 termination of a managed exec run. `kill` is the identity-checked OS
 process-tree fallback. These operations are not aliases.
+
+### Persistent `codex exec` sessions
+
+New `run()` and managed `start()` calls are ephemeral by default and include
+`--ephemeral` exactly once, after preflighting that the installed CLI advertises
+the flag. Pass `ephemeral=False` to omit that flag and request Codex's persistent
+exec behavior for later `resume()`. This setting applies
+only to new `codex exec` runs; it is unrelated to persistent app-server threads
+(`create_thread()` / `thread/resume`).
+
+```python
+from p4_codex_bridge import CodexBridge
+
+bridge = CodexBridge(allowed_roots=[r"C:\P4\work"])
+workspace = r"C:\P4\work\project"  # keep this directory available for resume
+
+# Default: ephemeral; the result is usable now but is not promised resumable.
+one_shot = bridge.run("Reply exactly: A", cwd=workspace)
+
+# Persistent: capture the native session identifier returned by Codex.
+first = bridge.run("Reply exactly: A", cwd=workspace, ephemeral=False)
+if not first.ok or not first.session_id:
+    raise RuntimeError(first.error or "Codex did not provide a reusable session ID")
+
+# A fresh bridge object can resume the same Codex session.
+another_bridge = CodexBridge(allowed_roots=[r"C:\P4\work"])
+second = another_bridge.resume(
+    first.session_id,
+    "Reply exactly: B",
+    cwd=workspace,
+    confirm_inherited_permissions=True,
+)
+```
+
+For managed execution, call `start(..., ephemeral=False)`, wait for a terminal
+run state, then obtain `RunResult.session_id` through
+`read_result(bridge_run_id)`. The service JSON submit request accepts the same
+typed field on `ExecRunSubmission` (and `p4-codex submit exec`); after completion,
+`CodexServiceClient.inspect(bridge_run_id)` reports the recorded native session
+ID. Neither `BridgeRun` nor the initial submit acknowledgement fabricates or
+guesses a session ID.
+
+Only an actual boolean is accepted. If Codex reports success but emits no valid
+`thread.started.thread_id`, the run is failed with code
+`SESSION_ID_UNAVAILABLE`; this avoids claiming a resumable conversation without
+its native identity. Fake CLI tests establish argument propagation and result
+contracts, **not** that the installed live CLI actually persists or can resume
+the conversation. Keep both Codex's stored session data and the workspace; the
+bridge does not retain or reconstruct either. `resume()` validates its supplied
+`cwd` and uses it as the process launch directory, but does not guarantee it
+changes the workspace saved in the original Codex session.
+
+Exec `resume()` requires `confirm_inherited_permissions=True`: permissions from
+the original session remain in effect, and this confirmation does not replace
+them or change them. `output_schema` on resume is capability-checked against the
+installed `codex exec resume --help`; unsupported flags fail before dispatch.
+If the session is missing or not resumable, Codex returns a normal failed
+`RunResult` with a normalized nonzero-exit error. This is distinct from
+app-server `resume_thread()`, which resumes a thread and starts no turn.
 
 ### Skip the Git repository check
 
@@ -158,9 +219,12 @@ error or check the capability field above before submitting. A pre-existing
 directory outside Git works the same way as the temporary example; it still
 must exist and be allowed by bridge path policy.
 
-The option is intentionally limited to `run()` and managed `start()`. It is not
-forwarded through `resume()`, `fork()`, `review()`, `CodexServiceClient`, or the
-CLI/service submit payloads in the current implementation. See the [current execution contract](CONTRACT.md) for supported signatures.
+The Git-check bypass remains intentionally limited to `run()` and managed
+`start()`; it is not forwarded through `resume()`, `fork()`, `review()`,
+`CodexServiceClient`, or CLI/service submit payloads. `ephemeral` is supported
+by direct/managed exec and the typed service exec submission, but does not
+apply to app-server thread or turn operations. See the [current execution
+contract](CONTRACT.md) for supported signatures.
 
 ### Errors and resource scheduling boundary
 
@@ -209,7 +273,7 @@ independently polls persisted events. See [live observability](LIVE_OBSERVABILIT
 
 ## Install / import
 
-The package has no third-party runtime dependency beyond the Python 3.10 TOML compatibility dependency. Current source version `1.1.0` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`. Install this repository into the caller's Python environment with `pip install -e .`, or install a built wheel. Codex CLI remains an external installed prerequisite. Python >=3.10 is declared.
+The runtime dependency `portable-tempdirs` 0.1.1 is pinned to Git commit `8dfe64c5a60b568cfda1c1fdce0cae4bd6cab275`; it provides managed, identity-checked temporary directories. Installation requires Git/network access or a prebuilt artifact in an approved offline source. This direct-URL dependency also means these distribution metadata must not be uploaded to PyPI until the dependency is replaced by a published, verified release and the resulting package metadata is checked. Current development source version `1.2.0` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`; this change is not a published release. Install this repository into the caller's Python environment with `pip install -e .`, or install a built wheel. Codex CLI remains an external installed prerequisite. Python >=3.11 is declared; this is a breaking runtime-support change from the prior Python >=3.10 contract.
 
 ```python
 from p4_codex_bridge import (
@@ -240,14 +304,14 @@ print(result.content)
 | `get_version()` | Executes `codex --version` and returns its first line. |
 | `get_capabilities()` | Queries local root, `exec`, advanced exec subcommands, and `app-server` help; returns machine-readable support/state notes. |
 | `list_models(include_hidden=False)` | Uses short-lived app-server JSON-RPC `model/list`, paginated. Catalog is not an entitlement check. |
-| `run(prompt, ...)` | Starts an asynchronous managed one-shot run, waits, returns `RunResult`, consumes the result file. |
-| `start(prompt, ...)` | Starts one bridge-managed `codex exec` process and returns `BridgeRun`; it does not create a persistent Codex conversation. |
+| `run(prompt, ...)` | Runs direct synchronous exec outside the scheduler, waits, returns `RunResult`. `ephemeral=False` requests a reusable Codex exec session. |
+| `start(prompt, ...)` | Synchronously submits one managed `codex exec` job and returns `BridgeRun` while the worker runs; use `read_result()` after completion. `ephemeral=False` requests a reusable session. |
 | `get_run(id)` / `status(id)` | Returns current managed-process metadata; dead workers without a terminal update become `ORPHANED`. |
 | `list_runs()` | Lists only records in this bridge's local registry. |
 | `stop(id)` | Requests cooperative cancellation through the worker; falls back to `kill()` after its grace interval. |
 | `kill(id)` | Force terminates only identity-verified PIDs registered for that run. |
 | `read_result(id)` | Reads and deletes the sanitized result for an asynchronous run; returns `None` until ready or after it was consumed. |
-| `resume(session_id, prompt, ...)` | Runs `codex exec resume`; requires `confirm_inherited_permissions=True` because stored session policy is retained. It is not app-server `thread/resume`. |
+| `resume(session_id, prompt, ...)` | Runs `codex exec resume`; requires `confirm_inherited_permissions=True` because stored session policy is retained. Optional schema is checked against resume-specific installed help. It is not app-server `thread/resume`. |
 | `fork(session_id, prompt, ...)` | Runs `codex exec fork`; result `session_id` is parsed from JSONL when Codex emits `thread.started`. |
 | `review(cwd, uncommitted/base/commit, ...)` | Runs installed `codex exec review` for exactly one supported target. Arbitrary file lists are not supported. |
 | `get_effective_config(cwd, ...)` | Diagnostic `config/read` query with a secret-filtered whitelist and layer/source metadata. |

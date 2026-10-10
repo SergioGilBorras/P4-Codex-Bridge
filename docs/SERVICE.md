@@ -57,7 +57,16 @@ The command table is a request/ack channel, not a second scheduler. It preserves
 the pending-payload policy and clears payload content atomically at claim,
 retaining only a hash for idempotency. Its cross-process fake-daemon flow is
 covered offline. Live Codex service operation is environment-specific; offline fake-daemon tests do not establish account entitlement or run-level MCP isolation.
-never accept arbitrary Python/CLI commands. Do not add HTTP as a shortcut.
+The command channel must never accept arbitrary Python/CLI commands. Do not add
+HTTP as a shortcut.
+
+Keep the client and resident service on the same Bridge release. In particular,
+a 1.2.0 client sends the typed `ephemeral` field, which a 1.1.0 service rejects
+as unknown. For an upgrade, stop the service, update the package in its Python
+environment, restart it with the existing state directory, then verify the
+reported service version before submitting. A 1.2.0 service defaults legacy
+exec payloads that omit this field to `ephemeral=true`; this narrow behavior is
+not a general mixed-version compatibility promise.
 
 `ps`, `inspect`, `watch`, `resources`, health and metrics remain direct
 read-only SQLite queries. Cancel/approval decisions and service stop are

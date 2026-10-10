@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv311/
+.package-check/
 venv/
 build/
 dist/
