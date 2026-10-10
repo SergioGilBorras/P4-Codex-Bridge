@@ -3,7 +3,7 @@
 ## Requirements
 
 - Python **3.11+**. Bridge 1.2.0 drops Python 3.10 support because it now uses the standard-library `StrEnum` and `tomllib` APIs and depends on `portable-tempdirs`.
-- `portable-tempdirs` 0.1.1 is pinned to Git commit `8dfe64c5a60b568cfda1c1fdce0cae4bd6cab275`; install therefore requires Git and access to that repository unless the dependency has been prebuilt and provided through an approved offline package source.
+- `portable-tempdirs` 0.1.2 is pinned to Git commit `fd6dbd640630e6911a53b4d756089099ec870a8b`; install therefore requires Git and access to that repository unless the dependency has been prebuilt and provided through an approved offline package source.
 - Installed official Codex CLI, available to the same operating-system user and process environment that runs the bridge.
 - Codex authentication through `codex login` or another CLI-supported mechanism. The bridge does not require `OPENAI_API_KEY` or access Codex login tokens.
 - A directory for `cwd` that already exists and passes optional `allowed_roots` checks. Git is not required if the caller explicitly uses the supported `skip_git_repo_check` option.

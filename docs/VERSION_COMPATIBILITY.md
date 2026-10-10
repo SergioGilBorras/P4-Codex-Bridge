@@ -4,7 +4,7 @@
 
 - Supported Python runtime: **3.11+**. The 1.2.0 development line is incompatible with Python 3.10: it removes the `StrEnum` compatibility shim, uses stdlib `tomllib`, and adds `portable-tempdirs` (which declares Python >=3.11).
 - This is a deliberate breaking runtime-support change from the previous contract. Consumers must run Bridge under Python 3.11 or newer; no Python 3.10 compatibility guarantee remains.
-- `portable-tempdirs` 0.1.1 is pinned to immutable Git commit `8dfe64c5a60b568cfda1c1fdce0cae4bd6cab275`. VCS installation needs Git/network access or a prebuilt dependency artifact; the current direct-reference metadata is not suitable for PyPI upload without replacing the reference with a published, verified dependency and checking the resulting distribution metadata.
+- `portable-tempdirs` 0.1.2 is pinned to immutable Git commit `fd6dbd640630e6911a53b4d756089099ec870a8b`. VCS installation needs Git/network access or a prebuilt dependency artifact; the current direct-reference metadata is not suitable for PyPI upload without replacing the reference with a published, verified dependency and checking the resulting distribution metadata.
 - The bridge uses the installed **Codex CLI**, not a direct OpenAI Responses API integration.
 - Codex CLI features and app-server methods are checked using the installed CLI help, generated local schema and/or live protocol handshake. A matching version string alone is not authoritative.
 - The app-server protocol remains experimental. Generated schema presence can mean “supported with limitations”; a successful matching RPC is stronger evidence.

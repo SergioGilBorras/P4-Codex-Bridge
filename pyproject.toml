@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Shared Python API for Codex CLI execution used by P4 components"
 requires-python = ">=3.11"
 dependencies = [
-  "portable-tempdirs @ git+https://github.com/SergioGilBorras/portable-tempdirs.git@8dfe64c5a60b568cfda1c1fdce0cae4bd6cab275",
+  "portable-tempdirs @ git+https://github.com/SergioGilBorras/portable-tempdirs.git@fd6dbd640630e6911a53b4d756089099ec870a8b",
 ]
 
 [project.scripts]
