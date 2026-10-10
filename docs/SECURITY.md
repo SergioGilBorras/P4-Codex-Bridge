@@ -5,7 +5,7 @@
 | Area | Classification | Guarantee / limitation |
 |---|---|---|
 | Filesystem sandbox | BEST_EFFORT | Bridge maps verified Codex sandbox modes; it does not claim an OS-level sandbox beyond Codex's actual implementation. |
-| Managed temporary directories | BEST_EFFORT | Short-lived schema and worker files use `portable-tempdirs` 0.1.1 with an explicit parent where applicable. Identity-aware cleanup reduces name-substitution risk; it does not grant permissions, bypass sandbox restrictions, secure untrusted ancestors, or guarantee deletion after OS sharing/access failures. Deferred cleanup is reported as a sanitized `TemporaryCleanupDeferred` event and does not replace an already persisted execution result. |
+| Managed temporary directories | BEST_EFFORT | Short-lived schema and worker files use `portable-tempdirs` 0.1.2 with an explicit parent where applicable. Identity-aware cleanup reduces name-substitution risk; it does not grant permissions, bypass sandbox restrictions, secure untrusted ancestors, or guarantee deletion after OS sharing/access failures. Deferred cleanup is reported as a sanitized `TemporaryCleanupDeferred` event and does not replace an already persisted execution result. |
 | MCP isolation | NOT_GUARANTEED | Codex exposes no verified per-run MCP filter or empty-MCP receipt. Requested isolation is rejected. |
 | External MCP side effects | BEST_EFFORT | Unknown effective MCP set rejects by default. Trusted, acknowledged opt-in permits unfiltered risk with a warning; no tool-level classification/filter is claimed. |
 | Project config | BEST_EFFORT | Default policy rejects discovered project config unless explicitly permitted for a trusted project. Codex trust and child effective config are not inferred from cwd alone. |

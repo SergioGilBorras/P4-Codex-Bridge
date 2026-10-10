@@ -39,6 +39,20 @@ class PortableTemporaryDirectoryTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._test_temp_owner.cleanup()
 
+    def test_runtime_uses_fixed_portable_tempdirs_cleanup_release(self) -> None:
+        from importlib.metadata import version
+        from portable_tempdirs.core import _is_transient_windows_cleanup_error
+
+        self.assertEqual(version("portable-tempdirs"), "0.1.2")
+        # Native Windows sharing/lock errors are retryable only when tagged by
+        # the library; identity, reparse, and permission failures remain fatal.
+        sharing = TemporaryDirectoryError("locked", code="CLEANUP_INCOMPLETE",
+                                         diagnostic={"os_error_code": 0xC0000043})
+        identity = TemporaryDirectoryError("changed", code="IDENTITY_CHANGED",
+                                          diagnostic={"os_error_code": 0xC0000043})
+        self.assertTrue(_is_transient_windows_cleanup_error(sharing))
+        self.assertFalse(_is_transient_windows_cleanup_error(identity))
+
     def test_explicit_parent_creation_and_identity_checked_cleanup(self) -> None:
         parent = self.root / "authorized-parent"
         parent.mkdir()
