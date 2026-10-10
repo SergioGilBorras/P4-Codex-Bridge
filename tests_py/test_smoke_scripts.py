@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import importlib.util
-import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
 
@@ -57,11 +57,12 @@ class RealSmokeScriptTests(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
         spec.loader.exec_module(module)
-        with tempfile.TemporaryDirectory(prefix="p4-smoke-config-test-") as temporary:
+        with TemporaryDirectory(prefix="p4-smoke-config-test-") as temporary:
             root = Path(temporary)
             workspace = root / "workspace"
             workspace.mkdir()
-            config = ServiceConfig.load(module._write_service_config(root, workspace))
+            config = ServiceConfig.load(module._write_service_config(root, workspace),
+                                        state_dir=root / "isolated-state")
             self.assertEqual(config.log_dir, (root / "logs").resolve())
             self.assertEqual(config.cwd, workspace.resolve())
 

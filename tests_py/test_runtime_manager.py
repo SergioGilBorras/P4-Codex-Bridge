@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -68,7 +68,7 @@ class RuntimeManagerTests(unittest.TestCase):
         self.security_validation = patch("p4_codex_bridge.runtime_manager.validate_run_security",
             return_value=SecurityDecisionResult(SecurityDecision.ALLOW, policy_id="offline-fake"))
         self.security_validation.start()
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.manager = CodexRuntimeManager(cwd=self.root, database_path=self.root / "bridge.sqlite",
             lock_path=self.root / "runtime.lock", command=[sys.executable, "-u", "-c", FAKE_SERVER])

@@ -2,7 +2,8 @@
 
 ## Requirements
 
-- Python **3.10+**. On Python 3.10, the package installs `tomli` for TOML configuration parsing.
+- Python **3.11+**. Bridge 1.2.0 drops Python 3.10 support because it now uses the standard-library `StrEnum` and `tomllib` APIs and depends on `portable-tempdirs`.
+- `portable-tempdirs` 0.1.1 is pinned to Git commit `8dfe64c5a60b568cfda1c1fdce0cae4bd6cab275`; install therefore requires Git and access to that repository unless the dependency has been prebuilt and provided through an approved offline package source.
 - Installed official Codex CLI, available to the same operating-system user and process environment that runs the bridge.
 - Codex authentication through `codex login` or another CLI-supported mechanism. The bridge does not require `OPENAI_API_KEY` or access Codex login tokens.
 - A directory for `cwd` that already exists and passes optional `allowed_roots` checks. Git is not required if the caller explicitly uses the supported `skip_git_repo_check` option.
@@ -17,7 +18,9 @@ Use the intended Python environment, preferably a virtual environment:
     python -m p4_codex_bridge --version
     python -m p4_codex_bridge --help
 
-Source package version: **1.1.0**. Installing from this checkout is not equivalent to publishing a release to a package index.
+Source package version: **1.2.0 (development, not published)**. Installing from this checkout is not equivalent to publishing a release to a package index.
+
+The fixed Git dependency avoids moving-branch resolution. The dependency is installed from an immutable source commit; this does not make Bridge distributions self-contained offline. Because project metadata declares a direct Git URL, do not upload these distributions to PyPI unless the dependency is replaced by a published, verified release and the resulting metadata is checked.
 
 Preflight the external Codex CLI independently (no model call):
 

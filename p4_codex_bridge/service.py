@@ -64,10 +64,7 @@ class ServiceConfig:
         selected = Path(os.path.expandvars(str(path))).expanduser().resolve() if path else None
         if selected and selected.is_file():
             try:
-                try:
-                    import tomllib
-                except ImportError:  # Python 3.10
-                    import tomli as tomllib  # type: ignore[no-redef]
+                import tomllib
                 content = selected.read_bytes()
                 if content.startswith(b"\xef\xbb\xbf"):
                     content = content[3:]
@@ -252,9 +249,21 @@ def read_service_state(state_dir: str | Path) -> dict[str, Any]:
         # A fresh heartbeat is useful liveness evidence only when Windows denied
         # process-time inspection; an explicit identity mismatch never falls back.
         identity_unavailable = not identity or not observed_identity
-        alive = identity_verified or (identity_unavailable and 0 <= heartbeat_age <= 5)
+        # STOPPED is written only after the runtime manager and its singleton
+        # lock have shut down. On POSIX, an exited child can remain visible as
+        # a zombie until its parent calls wait(); its /proc start identity still
+        # matches, but it cannot serve work and must not keep service stop
+        # requests pending while the parent waits for this status response.
+        service_stopped = data.get("state") == "STOPPED"
+        alive = False if service_stopped else identity_verified or (
+            identity_unavailable and 0 <= heartbeat_age <= 5
+        )
         data["process_identity_verified"] = identity_verified
-        data["liveness_source"] = "process_identity" if identity_verified else "recent_heartbeat" if alive else "stale_or_mismatched"
+        data["liveness_source"] = (
+            "service_state_stopped" if service_stopped else
+            "process_identity" if identity_verified else
+            "recent_heartbeat" if alive else "stale_or_mismatched"
+        )
         data["running"] = alive
         if not alive and data.get("state") not in {"STOPPED", "CRASHED"}:
             data["state"] = "CRASHED"
@@ -446,16 +455,19 @@ class ForegroundService:
                 access_mode = payload.pop("access_mode")
                 resource_priority = payload.pop("resource_priority")
                 output_schema = payload.pop("output_schema")
+                ephemeral = payload.pop("ephemeral", True)
                 if payload:
                     raise ValueError("unknown exec submission fields")
                 validated = ExecRunSubmission(prompt=prompt, cwd=cwd, profile=profile, model=model,
                     timeout_seconds=timeout_seconds, config_policy=config_policy, metadata=metadata,
                     access_mode=access_mode, resource_priority=resource_priority,
-                    permissions=permissions, output_schema=output_schema, security_policy=security_policy).payload()
+                    permissions=permissions, output_schema=output_schema, ephemeral=ephemeral,
+                    security_policy=security_policy).payload()
                 record = self.exec_bridge.start(validated["prompt"], cwd=validated["cwd"], profile=validated["profile"],
                     model=validated["model"], timeout_seconds=validated["timeout_seconds"],
                     config_policy=validated["config_policy"], metadata=validated["metadata"],
                     permissions=permissions, output_schema=validated["output_schema"],
+                    ephemeral=validated["ephemeral"],
                     access_mode=validated["access_mode"], resource_priority=validated["resource_priority"],
                     security_policy=security_policy)
                 result = {"bridge_run_id": record.bridge_run_id, "status": record.status.value, "backend": "exec"}

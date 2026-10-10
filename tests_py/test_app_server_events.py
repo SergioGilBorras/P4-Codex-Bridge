@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import threading
 import time
 import unittest
@@ -148,7 +148,7 @@ class EventNormalizationTests(unittest.TestCase):
         self.assertEqual(event.data["tokenUsage"]["total"]["totalTokens"], 15)
 
     def test_database_migration_preserves_existing_runs_and_adds_event_tables(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             db = Path(temp) / "runs.sqlite3"
             import sqlite3
             with sqlite3.connect(db) as connection:
@@ -165,7 +165,7 @@ class EventNormalizationTests(unittest.TestCase):
 
 class FakeAppServerTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="p4-event-test-")
+        self.temp = TemporaryDirectory(prefix="p4-event-test-")
         self.root = Path(self.temp.name); self.cwd = self.root / "workspace"; self.cwd.mkdir()
         self.fake = self.root / "fake_codex.py"; self.fake.write_text(FAKE_APP_SERVER, encoding="utf-8")
         self.env = patch.dict(os.environ, {"P4_CODEX_BRIDGE_CODEX_EXECUTABLE": str(self.fake)}); self.env.start()

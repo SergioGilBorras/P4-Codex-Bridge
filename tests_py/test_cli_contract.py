@@ -2,7 +2,7 @@ import contextlib
 import io
 import json
 import os
-import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import unittest
 
 from p4_codex_bridge.cli import _error_exit_code, build_parser, main
@@ -38,7 +38,7 @@ class CliContractTests(unittest.TestCase):
         )], [3, 4, 5, 6, 7, 8, 2, 8, 7])
     def test_service_status_stdout_is_json_with_and_without_flag(self):
         previous = os.environ.get("P4_CODEX_BRIDGE_STATE_DIR")
-        with tempfile.TemporaryDirectory() as state:
+        with TemporaryDirectory() as state:
             try:
                 workspace = state.replace("\\", "/")
                 config = os.path.join(state, "bridge.toml")
@@ -87,6 +87,49 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
         self.assertEqual(json.loads(out.getvalue())["error"]["code"], "USAGE_ERROR")
         self.assertEqual(err.getvalue(), "invalid command arguments\n")
+
+    def test_submit_exec_json_forwards_ephemeral_to_typed_request(self):
+        from pathlib import Path
+        from unittest.mock import patch
+        from p4_codex_bridge.service_client import CommandResult, ExecRunSubmission
+        from p4_codex_bridge.security import ProjectTrust, RunSecurityPolicy
+
+        captured = []
+
+        class ServiceClient:
+            def __init__(self, **kwargs):
+                pass
+
+            def submit_exec_run(self, request, **kwargs):
+                captured.append(request)
+                return CommandResult("cmd_fake", "SUBMIT_EXEC_RUN", "COMPLETED",
+                                     {"bridge_run_id": "br_fake"})
+
+        cwd = str(Path.cwd())
+        security_policy = RunSecurityPolicy(
+            project_trust=ProjectTrust.TRUSTED,
+            allow_project_config=True,
+            allow_agents=True,
+            allow_skills=True,
+            allow_external_mcps=True,
+            allow_side_effect_mcps=True,
+            explicit_risk_acknowledgement=True,
+            policy_id="offline-cli-test",
+        ).to_dict()
+        for request, expected in (
+            ({"prompt": "persist", "cwd": cwd, "ephemeral": False}, False),
+            ({"prompt": "default", "cwd": cwd}, True),
+        ):
+            request["security_policy"] = security_policy
+            out = io.StringIO()
+            with patch("p4_codex_bridge.service_client.CodexServiceClient", ServiceClient), \
+                    patch("sys.stdin", io.TextIOWrapper(io.BytesIO(json.dumps(request).encode("utf-8")))), \
+                    contextlib.redirect_stdout(out):
+                code = main(["submit", "exec", "--json", "--state-dir", "C:\\\\state"])
+            self.assertEqual(code, 0, out.getvalue())
+            self.assertEqual(json.loads(out.getvalue())["status"], "COMPLETED")
+            self.assertIsInstance(captured[-1], ExecRunSubmission)
+            self.assertIs(captured[-1].ephemeral, expected)
 
 
 if __name__ == "__main__":

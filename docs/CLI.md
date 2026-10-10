@@ -101,7 +101,14 @@ process. Example:
   p4-codex submit exec --state-dir "$env:LOCALAPPDATA/p4-codex-bridge" --wait 30 --json
 ```
 
-Create a persistent thread by piping `cwd`, `profile`, optional `model`,
+For managed `codex exec` persistence, include `"ephemeral": false` in the
+`submit exec` JSON. It is strictly validated and defaults to `true`. The
+submission ack contains the bridge run ID; after Codex completes, use
+`p4-codex inspect <bridge_run_id>` to read the native session ID and continue
+it through `CodexBridge.resume()` with explicit permission confirmation.
+This is distinct from app-server persistent threads.
+
+Create a persistent app-server thread by piping `cwd`, `profile`, optional `model`,
 `sandbox`, `approval_policy`, `config_policy`, and `metadata` to
 `p4-codex thread create`. Start a turn by piping `thread_id`, `prompt`, and
 optional `timeout_seconds`, `metadata`, `access_mode`, and `resource_priority`

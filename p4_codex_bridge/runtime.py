@@ -83,6 +83,9 @@ def build_exec_argv(
     operation = request.get("operation", "run")
     argv = resolve_codex_command()
     if operation == "run":
+        ephemeral = request.get("ephemeral", True)
+        if type(ephemeral) is not bool:
+            raise ValueError("ephemeral must be a boolean")
         skip_git_repo_check = request.get("skip_git_repo_check", False)
         if type(skip_git_repo_check) is not bool:
             raise ValueError("skip_git_repo_check must be a boolean")
@@ -90,10 +93,12 @@ def build_exec_argv(
             "--ask-for-approval", request["permissions"]["approval_policy"],
             "exec",
         ])
+        if ephemeral:
+            argv.append("--ephemeral")
         if skip_git_repo_check:
             argv.append("--skip-git-repo-check")
         argv.extend([
-            "--json", "--ephemeral", "--sandbox", request["permissions"]["sandbox"],
+            "--json", "--sandbox", request["permissions"]["sandbox"],
             "-C", request["cwd"],
         ])
         for root in request.get("writable_roots", []):
@@ -170,6 +175,12 @@ def parse_exec_output(stdout: bytes, structured: bool, last_message: str | None 
     return content, parsed, None
 
 
+def is_valid_session_id(value: Any) -> bool:
+    return (isinstance(value, str) and bool(value.strip()) and value == value.strip()
+            and len(value) <= 255 and not value.startswith("-")
+            and not any(ord(ch) < 32 for ch in value))
+
+
 def extract_session_id(stdout: bytes) -> str | None:
     for line in stdout.decode("utf-8", "replace").splitlines():
         try:
@@ -178,7 +189,7 @@ def extract_session_id(stdout: bytes) -> str | None:
             continue
         if event.get("type") == "thread.started":
             value = event.get("thread_id")
-            if isinstance(value, str) and value:
+            if is_valid_session_id(value):
                 return value
     return None
 

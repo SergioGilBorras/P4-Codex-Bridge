@@ -7,6 +7,9 @@ Capabilities have three distinct layers: **bridge implementation**, **installed 
 | One-shot `codex exec` | Implemented | Installed executable, login, exec command and a successful matching run |
 | Managed queued exec | Implemented | As above; pending dispatch depends on local scheduler resources |
 | `skip_git_repo_check` for `run/start` | Implemented, opt-in, default false | `--skip-git-repo-check` in installed `codex exec --help`; bridge rejects unsupported requested flag |
+| `ephemeral=False` persistent exec request | Implemented, offline-tested | Bridge omits `--ephemeral`, requires a usable `thread.started.thread_id`, exposes it in `RunResult.session_id`; no live persistence/resume inference was run for this change |
+| Default `ephemeral=True` | Implemented, offline-tested | Installed `codex exec --help` must advertise `--ephemeral`; `get_capabilities()` exposes `exec.ephemeral` and `ephemeral_capability`; otherwise the bridge raises `CapabilityUnavailableError` before direct launch or managed enqueue |
+| `ephemeral` through service `submit exec` | Implemented, offline-tested | Strict bool in `ExecRunSubmission`, default true, payload validated again by service before managed `start()`; app-server thread lifecycle is separate |
 | Structured output | Implemented for exec | `--output-schema` in CLI help; emitted JSON syntax validated; schema completeness not guaranteed by bridge parser |
 | Capture final message | Implemented for exec | `--output-last-message` in CLI help and a final-message file from that run |
 | Exec resume/fork/review | Implemented with typed limits | Support for operation-specific installed CLI subcommand; session permissions/targets must be respected |
@@ -28,6 +31,6 @@ Capabilities have three distinct layers: **bridge implementation**, **installed 
 - `NOT_SUPPORTED`: an authoritative negative observation or a feature absent from the bridge contract.
 - `EFFECTIVE_FOR_RUN`: requires evidence tied to that particular bridge run ID, not a host-session tool list or separate diagnostic child.
 
-For programmatic inspection, use `CodexBridge.get_capabilities()` and documented app-server diagnostic APIs, then verify required features before submission. The 1.1 `get_capabilities()["exec"]["skip_git_repo_check"]` entry reports a boolean detected from CLI help; `skip_git_repo_check_capability` adds provenance/status.
+For programmatic inspection, use `CodexBridge.get_capabilities()` and documented app-server diagnostic APIs, then verify required features before submission. The `get_capabilities()["exec"]["skip_git_repo_check"]` entry reports a boolean detected from CLI help; the corresponding `skip_git_repo_check_capability` entry adds provenance/status.
 
 Do not infer capabilities from a Codex CLI version number alone. If the CLI, account, project trust or app-server schema changes, inspect again. See [version compatibility](VERSION_COMPATIBILITY.md), [security](SECURITY.md) and [roadmap](ROADMAP.md).

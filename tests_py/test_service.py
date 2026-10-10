@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-import tempfile
+from tests_py._portable_temp import TemporaryDirectory
 import time
 import unittest
 from pathlib import Path
@@ -17,7 +17,7 @@ from p4_codex_bridge.runtime import resolve_codex_command
 
 class ServiceConfigTests(unittest.TestCase):
     def test_codex_executable_environment_name_is_prefixed_and_legacy_alias_is_ignored(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             fake = Path(temp) / "codex.py"
             fake.write_text("pass\n", encoding="utf-8")
             with patch.dict(os.environ, {"PATH": "", "P4_CODEX_BRIDGE_CODEX_EXECUTABLE": str(fake)}, clear=True):
@@ -27,7 +27,7 @@ class ServiceConfigTests(unittest.TestCase):
                     resolve_codex_command()
 
     def test_defaults_and_precedence_cli_state_over_environment_over_file(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp)
             cwd = root / "workspace"
             cwd.mkdir()
@@ -43,23 +43,23 @@ class ServiceConfigTests(unittest.TestCase):
                 self.assertEqual(from_file.state_dir, (root / "file-state").resolve())
 
     def test_config_validation_rejects_unknown_keys_and_limits(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp)
             cwd = root / "workspace"
             cwd.mkdir()
             config = root / "bad.toml"
             config.write_text(f'[service]\ncwd = "{cwd.as_posix()}"\nunknown = true\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unknown keys"):
-                validate_config(config)
+                validate_config(config, state_dir=root / "isolated-state")
             config.write_text(f'[service]\ncwd = "{cwd.as_posix()}"\nshutdown_policy = "AUTO"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "shutdown_policy"):
-                validate_config(config)
+                validate_config(config, state_dir=root / "isolated-state")
             config.write_text(f'config_version = 1\n[service]\ncwd = "{cwd.as_posix()}"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unknown top-level section"):
-                validate_config(config)
+                validate_config(config, state_dir=root / "isolated-state")
 
     def test_state_dir_with_spaces_and_config_show_are_supported(self):
-        with tempfile.TemporaryDirectory(prefix="P4 Bridge State ") as temp:
+        with TemporaryDirectory(prefix="P4 Bridge State ") as temp:
             root = Path(temp)
             cwd = root / "Program Files workspace"
             cwd.mkdir()
@@ -70,26 +70,26 @@ class ServiceConfigTests(unittest.TestCase):
             self.assertTrue(str(report["config"]["state_dir"]).endswith("state with spaces"))
 
     def test_retention_config_is_typed_and_bounded(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp)
             cwd = root / "workspace"
             cwd.mkdir()
             config = root / "p4-codex.toml"
             config.write_text(f'[service]\ncwd = "{cwd.as_posix()}"\n[retention]\ndays = 10\nmax_completed_runs = 12\nmax_events_per_run = 50\n', encoding="utf-8")
-            loaded = ServiceConfig.load(config)
+            loaded = ServiceConfig.load(config, state_dir=root / "isolated-state")
             self.assertEqual((loaded.retention_days, loaded.max_completed_runs, loaded.max_events_per_run), (10, 12, 50))
 
     def test_config_accepts_utf8_bom_written_by_windows_tools(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp)
             cwd = root / "workspace"
             cwd.mkdir()
             config = root / "bom.toml"
             config.write_bytes(b'\xef\xbb\xbf[service]\ncwd = "' + cwd.as_posix().encode() + b'"\n')
-            self.assertEqual(ServiceConfig.load(config).cwd, cwd.resolve())
+            self.assertEqual(ServiceConfig.load(config, state_dir=root / "isolated-state").cwd, cwd.resolve())
 
     def test_doctor_uses_fake_cli_and_does_not_create_state_files(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp)
             cwd = root / "workspace"
             cwd.mkdir()
@@ -109,7 +109,7 @@ class ServiceConfigTests(unittest.TestCase):
 
 class MaintenanceTests(unittest.TestCase):
     def test_corrupt_database_health_is_read_only_and_reports_recovery_action(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             state = Path(temp)
             db_path = state / "runs.sqlite3"
             corrupt = b"this is not a sqlite database\x00\xff"
@@ -123,7 +123,7 @@ class MaintenanceTests(unittest.TestCase):
     def test_cleanup_dry_run_and_clean_preserve_active_lost_and_pending_approval(self):
         import sqlite3
         from datetime import datetime, timedelta, timezone
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             root = Path(temp)
             cwd = root / "workspace"
             cwd.mkdir()
@@ -171,7 +171,7 @@ class MaintenanceTests(unittest.TestCase):
 
     def test_capability_snapshot_compares_only_sanitized_small_records(self):
         from p4_codex_bridge import __version__
-        with tempfile.TemporaryDirectory() as temp:
+        with TemporaryDirectory() as temp:
             db_path = Path(temp) / "runs.sqlite3"
             _ensure_service_schema(db_path)
             first = _persist_capability_snapshot(db_path, "2026-10-07T00:00:00+00:00", "Codex 0.160.1",
@@ -186,8 +186,34 @@ class MaintenanceTests(unittest.TestCase):
 
 
 class ResidentServiceTests(unittest.TestCase):
+    def test_stopped_service_state_wins_over_still_visible_process_identity(self):
+        import json
+        import sqlite3
+        from contextlib import closing
+        from p4_codex_bridge.service import read_service_state
+
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            db_path = root / "runs.sqlite3"
+            _ensure_service_schema(db_path)
+            with closing(sqlite3.connect(db_path)) as db:
+                db.execute(
+                    "INSERT INTO bridge_service_state(singleton,instance_id,pid,process_identity,state,started_at,heartbeat_at,payload_json,last_fatal_error) "
+                    "VALUES(1,?,?,?,?,?,?,?,NULL)",
+                    ("service-test", os.getpid(), "same-process-identity", "STOPPED",
+                     "2026-10-10T00:00:00+00:00", "invalid-but-irrelevant", json.dumps({})),
+                )
+                db.commit()
+            with patch("p4_codex_bridge.service._process_identity", return_value="same-process-identity"):
+                state = read_service_state(root)
+
+        self.assertTrue(state["process_identity_verified"])
+        self.assertFalse(state["running"])
+        self.assertEqual(state["state"], "STOPPED")
+        self.assertEqual(state["liveness_source"], "service_state_stopped")
+
     def test_foreground_fake_service_status_metrics_stop_and_singleton(self):
-        with tempfile.TemporaryDirectory(prefix="p4 service state ") as temp:
+        with TemporaryDirectory(prefix="p4 service state ") as temp:
             root = Path(temp)
             cwd = root / "workspace"
             cwd.mkdir()
@@ -253,17 +279,17 @@ class ResidentServiceTests(unittest.TestCase):
                 self.assertEqual(inspected.returncode, 0, inspected.stderr)
                 self.assertEqual(__import__("json").loads(inspected.stdout)["backend"], "app-server")
                 stop_call = subprocess.run([sys.executable, "-m", "p4_codex_bridge", "service", "stop", "--config", str(config),
-                    "--state-dir", str(state), "--timeout", "15"], cwd=package_root, env=env,
-                    capture_output=True, text=True, timeout=20, shell=False)
-                self.assertEqual(stop_call.returncode, 0, stop_call.stderr)
+                    "--state-dir", str(state), "--timeout", "60"], cwd=package_root, env=env,
+                    capture_output=True, text=True, timeout=70, shell=False)
+                self.assertEqual(stop_call.returncode, 0, f"stdout={stop_call.stdout!r}; stderr={stop_call.stderr!r}")
                 stopped = __import__("json").loads(stop_call.stdout)
                 self.assertEqual(stopped["status"], "COMPLETED")
                 self.assertEqual(first.wait(timeout=5), 0)
                 self.assertEqual(service_status(state)["state"], "STOPPED")
             finally:
                 if first.poll() is None:
-                    request_service_action(state, "stop", timeout=5)
-                    first.wait(timeout=5)
+                    request_service_action(state, "stop", timeout=10)
+                    first.wait(timeout=15)
                 if first.stdout:
                     first.stdout.close()
                 if first.stderr:

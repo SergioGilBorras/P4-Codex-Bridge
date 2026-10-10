@@ -1,6 +1,6 @@
 # P4-Codex-Bridge documentation
 
-This index describes the **current 1.1.0 source tree**. Product functionality, verified local CLI capability, and intended roadmap work are distinct. The Codex CLI installation, authentication, protocol availability, and effective MCP/skills permissions can vary by environment.
+This index describes the **current 1.2.0 development source tree (not published)**. Product functionality, verified local CLI capability, and intended roadmap work are distinct. The Codex CLI installation, authentication, protocol availability, and effective MCP/skills permissions can vary by environment.
 
 ## Start here
 
