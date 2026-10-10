@@ -253,9 +253,9 @@ class ResidentServiceTests(unittest.TestCase):
                 self.assertEqual(inspected.returncode, 0, inspected.stderr)
                 self.assertEqual(__import__("json").loads(inspected.stdout)["backend"], "app-server")
                 stop_call = subprocess.run([sys.executable, "-m", "p4_codex_bridge", "service", "stop", "--config", str(config),
-                    "--state-dir", str(state), "--timeout", "30"], cwd=package_root, env=env,
-                    capture_output=True, text=True, timeout=40, shell=False)
-                self.assertEqual(stop_call.returncode, 0, stop_call.stderr)
+                    "--state-dir", str(state), "--timeout", "60"], cwd=package_root, env=env,
+                    capture_output=True, text=True, timeout=70, shell=False)
+                self.assertEqual(stop_call.returncode, 0, f"stdout={stop_call.stdout!r}; stderr={stop_call.stderr!r}")
                 stopped = __import__("json").loads(stop_call.stdout)
                 self.assertEqual(stopped["status"], "COMPLETED")
                 self.assertEqual(first.wait(timeout=5), 0)

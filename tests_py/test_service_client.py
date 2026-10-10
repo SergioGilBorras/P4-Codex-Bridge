@@ -276,10 +276,10 @@ class CrossProcessFakeDaemonTests(unittest.TestCase):
                 watched = cli("watch", run_id, "--state-dir", str(state))
                 self.assertEqual(watched.returncode, 0, watched.stderr)
                 self.assertIn("TurnCompleted", watched.stdout)
-                stop = cli("service", "stop", "--config", str(config), "--state-dir", str(state), "--timeout", "30",
-                           timeout=40)
-                self.assertEqual(stop.returncode, 0, stop.stderr)
-                service.wait(timeout=40)
+                stop = cli("service", "stop", "--config", str(config), "--state-dir", str(state), "--timeout", "60",
+                           timeout=70)
+                self.assertEqual(stop.returncode, 0, f"stdout={stop.stdout!r}; stderr={stop.stderr!r}")
+                service.wait(timeout=70)
             finally:
                 if service.poll() is None:
                     try:

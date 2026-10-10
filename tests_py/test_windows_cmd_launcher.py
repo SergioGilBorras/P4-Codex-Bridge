@@ -13,8 +13,8 @@ from pathlib import Path
 @unittest.skipUnless(os.name == "nt", "Windows .cmd launcher test")
 class WindowsCmdLauncherTests(unittest.TestCase):
     def _build_wheel(self, project: Path, wheelhouse: Path) -> None:
-        if importlib.util.find_spec("setuptools.build_meta") is None:
-            self.skipTest("setuptools build backend is not installed in this test interpreter; validate the package build separately")
+        if importlib.util.find_spec("setuptools") is None or importlib.util.find_spec("wheel") is None:
+            self.skipTest("setuptools and wheel are required for the offline wheel test; validate package build separately")
         command = [sys.executable, "-m", "pip", "wheel", str(project), "--no-deps",
                    "--no-build-isolation", "--wheel-dir", str(wheelhouse)]
         try:
@@ -28,7 +28,10 @@ class WindowsCmdLauncherTests(unittest.TestCase):
             diagnostic = exc.stderr or ""
             if "PermissionError" in diagnostic and "pip-build-tracker" in diagnostic:
                 self.skipTest("host policy denied pip build-tracker temp access; package install is checked separately")
-            raise
+            # pip captures its diagnostics in CalledProcessError; include only
+            # a bounded tail so CI reports the actual build failure.
+            excerpt = diagnostic[-2000:]
+            raise AssertionError(f"offline wheel build failed ({exc.returncode}): {excerpt}") from None
 
     def test_wrapper_contract_and_module_entrypoint(self):
         from p4_codex_bridge import __version__
