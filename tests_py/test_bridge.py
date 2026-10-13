@@ -274,7 +274,7 @@ class BridgeTests(unittest.TestCase):
                             config_overrides={"skip_git_repo_check": True})
 
     def test_scoped_web_search_override_is_validated_before_dispatch(self):
-        for mode in ("disabled", "cached", "live"):
+        for mode in ("disabled", "cached", "indexed", "live"):
             with self.subTest(mode=mode):
                 request = self.bridge._validate_request(
                     "research", cwd=self.cwd, profile="analysis", model=None,
@@ -284,6 +284,13 @@ class BridgeTests(unittest.TestCase):
                     config_policy="explicit", config_overrides={"web_search": mode},
                 )
                 self.assertEqual(request["config_overrides"]["web_search"], mode)
+                from unittest.mock import patch
+                from p4_codex_bridge.runtime import build_exec_argv
+                with patch("p4_codex_bridge.runtime.resolve_codex_command", return_value=["codex"]):
+                    argv = build_exec_argv(request)
+                self.assertIn("web_search=" + __import__("json").dumps(mode), argv)
+                self.assertIn("read-only", argv)
+                self.assertNotIn("sandbox_workspace_write.network_access=true", argv)
         for mode in (True, False, None, 1, "enabled", "LIVE", [], {}):
             with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, "web_search must be"):
                 self.bridge.run("x", cwd=self.cwd, config_policy="explicit",
