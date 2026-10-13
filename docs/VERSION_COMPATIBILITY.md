@@ -1,9 +1,9 @@
 # Runtime compatibility
 
-**Bridge source version:** `1.2.0` development. It is installed from source or a locally built distribution; this API change is not published.
+**Bridge source version:** `1.3.0` development. It is installed from source or a locally built distribution; this feature has not been published as a release.
 
-- Supported Python runtime: **3.11+**. The 1.2.0 development line is incompatible with Python 3.10: it removes the `StrEnum` compatibility shim, uses stdlib `tomllib`, and adds `portable-tempdirs` (which declares Python >=3.11).
-- This is a deliberate breaking runtime-support change from the previous contract. Consumers must run Bridge under Python 3.11 or newer; no Python 3.10 compatibility guarantee remains.
+- Supported Python runtime: **3.11+**. The 1.2.0 line dropped Python 3.10 support: it removes the `StrEnum` compatibility shim, uses stdlib `tomllib`, and adds `portable-tempdirs` (which declares Python >=3.11).
+- The Python 3.10 support removal was a deliberate breaking runtime change in 1.2.0; this 1.3.0 change is additive. Consumers must run Bridge under Python 3.11 or newer; no Python 3.10 compatibility guarantee remains.
 - `portable-tempdirs` 0.1.2 is pinned to immutable Git commit `fd6dbd640630e6911a53b4d756089099ec870a8b`. VCS installation needs Git/network access or a prebuilt dependency artifact; the current direct-reference metadata is not suitable for PyPI upload without replacing the reference with a published, verified dependency and checking the resulting distribution metadata.
 - The bridge uses the installed **Codex CLI**, not a direct OpenAI Responses API integration.
 - Codex CLI features and app-server methods are checked using the installed CLI help, generated local schema and/or live protocol handshake. A matching version string alone is not authoritative.
@@ -17,6 +17,16 @@ describes `--ephemeral` as disabling session rollout persistence and documents
 `exec resume`. Bridge `ephemeral=False` omits the flag; the CLI's default
 persistence behavior is not inferred from a bridge fake test. Resume schema
 support is probed against the resume subcommand's own help.
+
+## 1.3.0: per-exec opt-in web search
+
+Bridge 1.3.0 introduces a backwards-compatible per-run native Codex web-search override for `CodexBridge.run()` and `start()`: `config_overrides={"web_search": "disabled"|"cached"|"indexed"|"live"}`. Set `config_policy="isolated"` for this override alone, or `explicit` for permitted config overrides. `project` rejects these overrides. The mode is passed to `codex exec` using `-c web_search=...`. Calls that omit `web_search` retain previous behavior and the installed CLI's effective defaults.
+
+- This is **not** a guaranteed tool-use receipt or evidence that Codex visited a website. Bridge cannot currently attest search events or citations from the result.
+- `CodexPermissions.network_access` is independent and does not configure Codex's hosted web-search tool.
+- Existing `RunSecurityPolicy`/MCP isolation caveats remain. Enabling native search does not grant side-effect MCP, shell networking, filesystem write or execution permissions.
+- Consumers pinned to **1.2.0** do **not** receive this option. Upgrade the pinned immutable commit only after CI, API compatibility review and a controlled test; coordinate all service-client/server versions in the deployment and preserve runtime state.
+- Supported mode names follow the [Codex configuration basics](https://developers.openai.com/codex/config-basic). Actual availability depends on the installed Codex CLI/account; offline tests validate request/argument handling, not web access.
 
 ## Git repository check
 
