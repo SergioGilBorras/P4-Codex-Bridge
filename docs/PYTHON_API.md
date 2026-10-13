@@ -385,6 +385,41 @@ Typed tuning is `model`, `reasoning_effort`, `reasoning_summary` (`auto`, `conci
 
 `get_effective_config()` uses app-server `config/read`, not the same child process as `exec`; it returns only selected non-secret primitive fields and layer source types. Its result is diagnostic and must not be reported as an exact effective config for another run. For MCPs, `list_configured_mcps()` reports configured/enabled/advertised-tool state separately from callability, child visibility and per-run effectiveness. `list_effective_skills()` has the same diagnostic-child boundary. `get_effective_capabilities(include_diagnostics=True)` groups those three diagnostic responses, but never upgrades them to `EFFECTIVE_FOR_RUN`. `config_policy="isolated"` is not supported by the diagnostic app-server because it has no equivalent to exec's `--ignore-user-config`; the API returns `NOT_SUPPORTED` for those diagnostic fields instead of guessing. AGENTS loading is not acknowledged by `codex exec`; the marker script requires an explicit `--allow-unfiltered-mcps` acknowledgement before it can start a model run.
 
+### Per-run Codex web search (Bridge 1.3.0)
+
+For an explicitly authorized research run, pass a `web_search` override. It controls the *native Codex search tool*, not OS/sandbox networking. It is available with `config_policy="isolated"` (where it must be the **only** override) and `config_policy="explicit"`. `project` rejects overrides. The selected mode is passed as `-c web_search="<mode>"` to `codex exec`.
+
+| Mode | Intent |
+| --- | --- |
+| `disabled` | Disable the web-search tool for this run |
+| `cached` | Search previously cached results |
+| `indexed` | Permit index-gated external page access |
+| `live` | Search/access up-to-date web content |
+
+```python
+from p4_codex_bridge import CodexBridge, CodexPermissions, SandboxMode, ApprovalPolicy
+
+workspace = r"C:\work\scratch"
+bridge = CodexBridge(allowed_roots=[workspace])
+result = bridge.run(
+    "Find public documentation for Python CSV parsing options and include source URLs.",
+    cwd=workspace,
+    permissions=CodexPermissions(SandboxMode.READ_ONLY, ApprovalPolicy.NEVER),
+    config_policy="isolated",
+    config_overrides={"web_search": "live"},
+    timeout_seconds=120,
+    ephemeral=True,
+)
+if result.ok:
+    print(result.content)
+else:
+    print(result.error)
+```
+
+The same override is supported for new managed `start()` exec runs, subject to the normal security gate. Runs without the override preserve existing behavior and CLI defaults; disabling web search deliberately requires the explicit `disabled` mode. The bridge still enforces its configured `allowed_roots`, approval policy, sandbox and `RunSecurityPolicy`. **It does not prove MCP/tool isolation, search invocation, actual page access, URL accuracy or suitability of a discovered dependency.** There is no source-verification receipt in `RunResult` in this version. Treat external pages as untrusted; a consumer must validate links and evidence and require applicable human approval before incorporating an external solution.
+
+This option does not modify `CodexPermissions.network_access`, which only controls sandbox workspace-write network settings; it does not turn on arbitrary HTTP/shell access. No global service TOML `web_search` setting is supported. Callers remain responsible for privacy, approved search terms, budgets, rates and avoiding export of project secrets. [Codex configuration reference](https://developers.openai.com/codex/config-basic). The offline test suite uses a fake Codex CLI; a real search requires explicit operator authorization and an appropriately capable Codex installation.
+
 ## Foreground service
 
 `CodexServiceClient` is the intended public boundary for a running daemon. It
