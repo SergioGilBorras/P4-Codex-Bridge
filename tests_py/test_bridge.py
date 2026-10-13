@@ -273,6 +273,23 @@ class BridgeTests(unittest.TestCase):
             self.bridge.run("x", cwd=self.cwd, config_policy="explicit",
                             config_overrides={"skip_git_repo_check": True})
 
+    def test_scoped_web_search_override_is_validated_before_dispatch(self):
+        for mode in ("disabled", "cached", "live"):
+            with self.subTest(mode=mode):
+                request = self.bridge._normalize_run_request(
+                    "research", cwd=self.cwd, config_policy="explicit",
+                    config_overrides={"web_search": mode},
+                ) if hasattr(self.bridge, "_normalize_run_request") else None
+                if request is not None:
+                    self.assertEqual(request["config_overrides"]["web_search"], mode)
+        for mode in (True, False, None, 1, "enabled", "LIVE", [], {}):
+            with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, "web_search must be"):
+                self.bridge.run("x", cwd=self.cwd, config_policy="explicit",
+                                config_overrides={"web_search": mode})
+        with self.assertRaisesRegex(ValueError, "explicit config_policy"):
+            self.bridge.run("x", cwd=self.cwd, config_policy="isolated",
+                            config_overrides={"web_search": "live"})
+
     def test_skip_git_repo_check_fails_before_dispatch_when_cli_lacks_flag(self):
         self.codex.write_text(FAKE_CODEX.replace(" --skip-git-repo-check", ""), encoding="utf-8")
         self.bridge._capability_probe_cache.clear()
