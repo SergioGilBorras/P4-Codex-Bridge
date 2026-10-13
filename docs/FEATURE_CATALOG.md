@@ -1,6 +1,6 @@
 # Current feature catalog
 
-This page describes the current P4-Codex-Bridge 1.2.0 development source tree (not published). **Implemented** means a bridge code path exists with offline tests, not that a particular Codex CLI installation or account supports it. **Partial** means supported with explicit limits. **Unavailable** means no general supported bridge interface.
+This page describes the current P4-Codex-Bridge 1.3.0 development source tree (not published). **Implemented** means a bridge code path exists with offline tests, not that a particular Codex CLI installation or account supports it. **Partial** means supported with explicit limits. **Unavailable** means no general supported bridge interface.
 
 | Area | Status | Current behavior / limit |
 |---|---|---|
@@ -8,7 +8,7 @@ This page describes the current P4-Codex-Bridge 1.2.0 development source tree (n
 | Managed `CodexBridge.start()` | Implemented | Synchronous queued submission for asynchronous managed exec, shared SQLite scheduling/locks, cancellation, status and one-time result retrieval |
 | Persistent `codex exec` session | Implemented, offline-tested; live persistence not confirmed in this change | `ephemeral=False` omits `--ephemeral`; successful run requires a valid native session ID; continue with `resume()` and explicit inherited-permission acknowledgement |
 | Service exec persistence | Implemented, offline-tested | `ExecRunSubmission.ephemeral` is typed, defaults true, and is revalidated by the service; app-server thread persistence is separate |
-| `skip_git_repo_check` | Implemented, opt-in | Keyword-only bool on Python `run()`/`start()`, default `False`; requires advertised CLI flag |
+| Per-exec Codex web search | Implemented in bridge, offline-tested; live invocation not yet certified | `run()`/`start()` accept validated `web_search` `disabled/cached/indexed/live` only with `isolated` or `explicit` config policy. Does not grant shell network, MCP permissions or trustworthy source attestation. |\n| `skip_git_repo_check` | Implemented, opt-in | Keyword-only bool on Python `run()`/`start()`, default `False`; requires advertised CLI flag |
 | Exec `resume()`, `fork()`, `review()` | Implemented with limits | Separate APIs; session policy acknowledgement for resume/fork, one supported review target per request |
 | Structured output / last message | Implemented | CLI-backed temp files; syntax/response verification, not a guarantee that arbitrary schemas are fully satisfied |
 | Managed temporary directories | Implemented, offline-tested | Schema generation and worker schema/last-message files use `portable-tempdirs` 0.1.2; worker files live under an explicit `state_dir/temp` parent and are cleaned after completion, timeout, cancellation, or failure. If cleanup is denied, a sanitized `TemporaryCleanupDeferred` event is recorded where possible, and a completed result remains authoritative. Persistent state and Codex session data are never managed as disposable temporaries. |
