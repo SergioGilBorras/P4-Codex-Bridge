@@ -276,12 +276,14 @@ class BridgeTests(unittest.TestCase):
     def test_scoped_web_search_override_is_validated_before_dispatch(self):
         for mode in ("disabled", "cached", "live"):
             with self.subTest(mode=mode):
-                request = self.bridge._normalize_run_request(
-                    "research", cwd=self.cwd, config_policy="explicit",
-                    config_overrides={"web_search": mode},
-                ) if hasattr(self.bridge, "_normalize_run_request") else None
-                if request is not None:
-                    self.assertEqual(request["config_overrides"]["web_search"], mode)
+                request = self.bridge._validate_request(
+                    "research", cwd=self.cwd, profile="analysis", model=None,
+                    timeout_seconds=30, permissions=None, reasoning_effort=None,
+                    reasoning_summary=None, verbosity=None, output_schema=None,
+                    capture_last_message=False, include_raw_output=False,
+                    config_policy="explicit", config_overrides={"web_search": mode},
+                )
+                self.assertEqual(request["config_overrides"]["web_search"], mode)
         for mode in (True, False, None, 1, "enabled", "LIVE", [], {}):
             with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, "web_search must be"):
                 self.bridge.run("x", cwd=self.cwd, config_policy="explicit",
