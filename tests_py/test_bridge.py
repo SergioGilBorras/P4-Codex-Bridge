@@ -291,13 +291,28 @@ class BridgeTests(unittest.TestCase):
                 self.assertIn("web_search=" + __import__("json").dumps(mode), argv)
                 self.assertIn("read-only", argv)
                 self.assertNotIn("sandbox_workspace_write.network_access=true", argv)
+                isolated = self.bridge._validate_request(
+                    "research", cwd=self.cwd, profile="analysis", model=None,
+                    timeout_seconds=30, permissions=None, reasoning_effort=None,
+                    reasoning_summary=None, verbosity=None, output_schema=None,
+                    capture_last_message=False, include_raw_output=False,
+                    config_policy="isolated", config_overrides={"web_search": mode},
+                )
+                with patch("p4_codex_bridge.runtime.resolve_codex_command", return_value=["codex"]):
+                    isolated_argv = build_exec_argv(isolated)
+                self.assertIn("--ignore-user-config", isolated_argv)
+                self.assertIn("web_search=" + __import__("json").dumps(mode), isolated_argv)
+                self.assertNotIn("sandbox_workspace_write.network_access=true", isolated_argv)
         for mode in (True, False, None, 1, "enabled", "LIVE", [], {}):
             with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, "web_search must be"):
                 self.bridge.run("x", cwd=self.cwd, config_policy="explicit",
                                 config_overrides={"web_search": mode})
         with self.assertRaisesRegex(ValueError, "explicit config_policy"):
-            self.bridge.run("x", cwd=self.cwd, config_policy="isolated",
+            self.bridge.run("x", cwd=self.cwd, config_policy="project",
                             config_overrides={"web_search": "live"})
+        with self.assertRaisesRegex(ValueError, "explicit config_policy"):
+            self.bridge.run("x", cwd=self.cwd, config_policy="isolated",
+                            config_overrides={"model_verbosity": "low"})
 
     def test_skip_git_repo_check_fails_before_dispatch_when_cli_lacks_flag(self):
         self.codex.write_text(FAKE_CODEX.replace(" --skip-git-repo-check", ""), encoding="utf-8")
