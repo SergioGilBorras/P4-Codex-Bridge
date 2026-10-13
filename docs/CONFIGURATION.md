@@ -58,6 +58,12 @@ Supported TOML keys:
 Per-run risk settings are a typed `RunSecurityPolicy` in Python/service request
 payloads; they are not a service-wide TOML table. Unknown keys are errors.
 
+## Per-run native web search (Bridge 1.3.0)
+
+This feature is **not** a new TOML or environment variable. For an authorized `CodexBridge.run()` / `start()` call, provide `config_overrides={"web_search": "live"}` with `config_policy="isolated"` (only this override allowed), or use `explicit`. Valid modes: `disabled`, `cached`, `indexed`, `live`. In isolated mode the bridge preserves Codex's `--ignore-user-config` setting; it does not disable all possible child-visible MCP tools. Other overrides are rejected with `isolated` and all overrides are rejected with `project`.
+
+This is a Codex-hosted search capability, **not** `CodexPermissions.network_access`: the bridge does not enable OS shell networking, side-effect tools, external MCPs or write access. The installed CLI and account must support the selected mode; configured mode does not demonstrate that web search was invoked. A caller must validate citations and obtain any mandatory human review before treating a found component as approved. See [Python API](PYTHON_API.md), [security](SECURITY.md) and [Codex search mode documentation](https://developers.openai.com/codex/config-basic).
+
 The example state directory resolves under `%LOCALAPPDATA%`. The service does
 not modify NTFS ACLs; deploy it under a per-user local directory whose inherited
 ACLs are appropriate. SQLite on network shares is not a supported coordination
