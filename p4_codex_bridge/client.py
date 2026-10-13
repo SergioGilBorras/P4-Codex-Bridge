@@ -1565,8 +1565,9 @@ class CodexBridge:
             raise ValueError("use the typed model parameter instead of config_overrides['model']")
         if config_policy == "explicit" and not overrides and not typed_overrides and model is None:
             raise ValueError("config_overrides are required for explicit config_policy")
-        if config_policy != "explicit" and overrides:
-            raise ValueError("config_overrides require explicit config_policy")
+        if overrides and config_policy != "explicit":
+            if config_policy != "isolated" or set(overrides) != {"web_search"}:
+                raise ValueError("config_overrides require explicit config_policy except isolated web_search")
         if any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*", key) for key in overrides):
             raise ValueError("invalid Codex config override key")
         if "web_search" in overrides and (type(overrides["web_search"]) is not str or overrides["web_search"] not in {"disabled", "cached", "indexed", "live"}):
