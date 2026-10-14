@@ -20,6 +20,8 @@ Bridge can request `web_search=disabled|cached|indexed|live` on a supported isol
 
 `web_observations=null` means no opted-in web collection; `NOT_ATTESTED` means the output did not provide an observed matching web-search event. Some Codex versions do not export page URLs or results in JSONL, so an absence of evidence must stay an absence.
 
+The companion `RunResult.web_receipts` list projects each observed public hostname into the P4 adapter-compatible `WEB_SEARCH_EVENT_OBSERVED` shape (`operation`, `source_urls`, `page_content_confirmed=false`), always as an *unverified lead*. The list is `null` when web collection is disabled; empty when no accepted public host was observed. Neither field proves a page was read.
+
 **Not yet delivered:** page-exact URL receipts, proof of successful page loading, page-content provenance and P4-specific evidence IDs. These require upstream support and matching-run receipts, validation of public URLs without exposing secrets, and independent security review. Consumers must not promote these observations to `VERIFIED` or attach them as citations proving a candidate's API, license, version or safety. External dependency adoption continues to require `HUMAN_REVIEW_REQUIRED`.
 
 The parser is pure and covered by offline tests; CI never runs Codex for it. See [Python API](PYTHON_API.md), [security](SECURITY.md) and [roadmap](ROADMAP.md).
