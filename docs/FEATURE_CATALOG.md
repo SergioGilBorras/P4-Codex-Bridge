@@ -18,7 +18,7 @@ This page describes the current P4-Codex-Bridge 1.4.0 development source tree (n
 | Local foreground service | Implemented with limits | Same-user process/SQLite command boundary and typed Python service-client requests |
 | Process and state observability | Partial | Registry IDs, status, inspect, watch, health and metrics; no attachment or reliable full message-delta replay |
 | Security controls | Partial / enforced defaults | `allowed_roots`, sandbox/approval validation, `RunSecurityPolicy`, bounded captures and redaction; external MCP isolation is not guaranteed |
-| Native web-search source receipts | Unavailable | Bridge 1.4.0 can configure search modes, but cannot yet attest inspected URLs or turn model self-reports into verified evidence |\n| Per-run MCP allow/deny filtering | Unavailable | No verified Codex-protocol enforcement surface |
+| Native web-search event observations | Partial | Opt-in `RunResult.web_observations` and `web_receipts` report bounded observed search events and public host leads; no exact page receipt, page-content proof or verified candidate claims. See [provenance](WEB_PROVENANCE.md). |\n| Per-run MCP allow/deny filtering | Unavailable | No verified Codex-protocol enforcement surface |
 | Automatic approval of supposedly safe actions | Unavailable | No deterministic safe-action classifier |
 | Active turn/process adoption after uncertain controller loss | Unavailable | Conservative status reconciliation; no blind replay |
 | Windows native SCM service wrapper | Unavailable | Foreground service supported; service-manager integration is operational guidance, not a bundled SCM implementation |
