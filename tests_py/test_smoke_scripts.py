@@ -49,6 +49,17 @@ class RealSmokeScriptTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn("live inference disabled by default", result.stderr)
 
+    def test_fake_scheduler_example_has_side_effect_free_help(self) -> None:
+        script = ROOT / "examples" / "scheduler_demo.py"
+        result = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            cwd=ROOT, capture_output=True, text=True,
+            timeout=15, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--state-dir", result.stdout)
+        self.assertIn("--help", result.stdout)
+
     def test_python_api_smoke_is_opt_in_and_exposes_help(self) -> None:
         command = [sys.executable, str(ROOT / "tests_real" / "smoke_codex.py")]
         help_result = subprocess.run(
