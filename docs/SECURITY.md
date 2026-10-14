@@ -111,6 +111,6 @@ who can read/write the state directory can submit/control work, so multi-user
 isolation is not guaranteed; keep the directory private using normal Windows
 account ACLs. A claimed command is never re-executed after an ambiguous crash.
 
-## Hosted web search versus network permissions (Bridge 1.4.0)
+## Hosted web search versus network permissions (Bridge 1.4.1)
 
 `CodexBridge.run()` / `start()` can opt into Codex's native web-search tool with `config_policy="isolated"` and `config_overrides={"web_search":"live"}`. This does not enable sandbox shell network access and does not provide a verified per-run MCP allowlist. It also does not prove the model searched, inspected a particular URL or verified an external dependency. The `RunSecurityPolicy` and its rejection of unverified MCP isolation remain in force. Preserve `READ_ONLY` and `NEVER` for research-only runs; never enable external or side-effect MCPs just to obtain search access. Consumers must not transmit workspace secrets, private code or sensitive descriptions as public search queries; returned pages are untrusted. Verify exact links and source claims and obtain human approval before adopting third-party code. See [Python API](PYTHON_API.md#per-run-codex-web-search-bridge-130).
