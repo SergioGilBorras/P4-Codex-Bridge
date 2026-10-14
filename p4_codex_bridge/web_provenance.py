@@ -5,6 +5,7 @@ No search queries, page text, auth data, or model reasoning are persisted.
 """
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 from urllib.parse import urlsplit
@@ -53,7 +54,7 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
     A hostname is a discovery hint only, never an attested exact page URL.
     """
     sources: list[dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
     observed = False
     truncated = len(raw) > MAX_JSONL_BYTES
     # Reading only the first bounded bytes also prevents scanning unlimited output.
@@ -90,14 +91,17 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
             if origin is None:
                 continue
             state = "PAGE_OPEN_OBSERVED" if kind == "open_page" and val == action.get("url") else "SOURCE_DISCOVERED"
-            key = (state, origin)
+            # Correlate full observed URL without persisting its private path.
+            # The origin alone cannot attest an exact cited page.
+            digest = hashlib.sha256(val.encode("utf-8")).hexdigest()
+            key = (state, origin, digest)
             if key in seen:
                 continue
             seen.add(key)
             if len(sources) == MAX_SOURCES:
                 truncated = True
                 break
-            sources.append({"state": state, "origin": origin})
+            sources.append({"state": state, "origin": origin, "url_sha256": digest})
         if len(sources) == MAX_SOURCES:
             break
     return {
@@ -126,8 +130,12 @@ def to_p4_web_receipts(observations: object) -> list[dict[str, object]]:
         state = source.get("state")
         if safe_public_https_url(origin) != origin or state not in ("PAGE_OPEN_OBSERVED", "SOURCE_DISCOVERED"):
             continue
+        digest = source.get("url_sha256")
+        if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            continue
         receipts.append({
             "kind": "WEB_SEARCH_EVENT_OBSERVED",
+            "url_sha256": digest,
             "operation": "open_page" if state == "PAGE_OPEN_OBSERVED" else "search",
             "source_urls": [origin],
             "page_content_confirmed": False,
