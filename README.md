@@ -2,7 +2,7 @@
 
 P4-Codex-Bridge is a Python interface and operator CLI for the locally installed OpenAI Codex CLI. It uses the user's existing Codex authentication and provides execution controls, lifecycle tracking, observability, and experimental app-server integrations.
 
-**Current source version: 1.3.0 (development, not published).** This repository is a Python implementation; no Node.js bridge runtime or JavaScript API is provided. Node.js may still be required by a particular Codex CLI installation.
+**Current source version: 1.4.0 (development, not published).** This repository is a Python implementation; no Node.js bridge runtime or JavaScript API is provided. Node.js may still be required by a particular Codex CLI installation.
 
 ## What works today
 
@@ -79,9 +79,9 @@ the session's stored workspace. Keep the workspace and Codex session data if
 you intend to resume. See [Python API](docs/PYTHON_API.md) for managed/service
 examples and error handling.
 
-## Opt-in web search for a single Codex exec (new in 1.3.0)
+## Opt-in web search for a single Codex exec
 
-Bridge 1.3.0 accepts a **per-execution** `web_search` configuration via `CodexBridge.run()` or managed `start()`, without enabling network access for shell commands. The modes are `disabled` (off), `cached` (search cache), `indexed` (index-gated external browsing) and `live` (current websites), subject to support in the installed Codex CLI. This option does not make Codex search on every turn: it makes the search tool available for the model to choose.
+Bridge 1.4.0 accepts a **per-execution** `web_search` configuration via `CodexBridge.run()` or managed `start()`, without enabling network access for shell commands. The modes are `disabled` (off), `cached` (search cache), `indexed` (index-gated external browsing) and `live` (current websites), subject to support in the installed Codex CLI. This option does not make Codex search on every turn: it makes the search tool available for the model to choose.
 
 ```python
 from p4_codex_bridge import CodexBridge, CodexPermissions, SandboxMode, ApprovalPolicy
