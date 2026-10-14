@@ -105,6 +105,8 @@ class RunResult:
     duration_ms: int = 0
     session_id: str | None = None
     raw_output: str | None = None
+    web_observations: dict[str, Any] | None = None
+    web_receipts: list[dict[str, Any]] | None = None
 
     @property
     def text_output(self) -> str:

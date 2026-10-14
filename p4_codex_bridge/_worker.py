@@ -386,7 +386,18 @@ def _execute_with_temp_directory(
         error = "Codex completed without a reusable session ID"
         error_code = "SESSION_ID_UNAVAILABLE"
         terminal = RunStatus.FAILED
+    web_observations = None
+    overrides = request.get("config_overrides") or {}
+    if isinstance(overrides, dict) and overrides.get("web_search") in ("cached", "indexed", "live"):
+        from .web_provenance import extract_web_observations
+        web_observations = extract_web_observations(bytes(stdout))
+    web_receipts = None
+    if web_observations is not None:
+        from .web_provenance import to_p4_web_receipts
+        web_receipts = to_p4_web_receipts(web_observations)
     result = {
+        "web_receipts": web_receipts,
+        "web_observations": web_observations,
         "ok": terminal == RunStatus.COMPLETED and error is None,
         "bridge_run_id": run_id,
         "exit_code": exit_code,
