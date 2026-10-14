@@ -124,7 +124,8 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
             if origin is None:
                 continue
             state = "PAGE_OPEN_OBSERVED" if kind == "open_page" and val == action.get("url") else "SOURCE_DISCOVERED"
-            key = (state, origin)
+            exact_page = safe_public_page_url(val)
+            key = (state, exact_page or origin)
             if key in seen:
                 continue
             seen.add(key)
@@ -132,7 +133,6 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
                 truncated = True
                 break
             record = {"state": state, "origin": origin}
-            exact_page = safe_public_page_url(val)
             if exact_page is not None:
                 record["page_url"] = exact_page
             sources.append(record)
