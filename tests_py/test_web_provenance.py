@@ -65,9 +65,11 @@ class WebProvenanceTests(unittest.TestCase):
     def test_run_result_remains_compatible_with_old_payload(self):
         old = RunResult(ok=True, bridge_run_id="br_1", exit_code=0, content="ok", stderr="")
         self.assertIsNone(old.web_observations)
+        self.assertIsNone(old.web_receipts)
         attached = RunResult(ok=True, bridge_run_id="br_1", exit_code=0, content="ok",
                              stderr="", web_observations=extract_web_observations(b""))
         self.assertEqual(attached.web_observations["status"], "NOT_ATTESTED")
+        self.assertIsNone(attached.web_receipts)
 
 
 if __name__ == "__main__":
