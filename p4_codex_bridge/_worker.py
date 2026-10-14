@@ -393,8 +393,10 @@ def _execute_with_temp_directory(
         web_observations = extract_web_observations(bytes(stdout))
     web_receipts = None
     if web_observations is not None:
-        from .web_provenance import to_p4_web_receipts
-        web_receipts = to_p4_web_receipts(web_observations)
+        # Independent, strictly sanitized exact-page locators. The domain-only
+        # observations remain unchanged for privacy-preserving diagnostics.
+        from .web_page_receipts import collect_web_receipts
+        web_receipts = collect_web_receipts(bytes(stdout))
     result = {
         "web_receipts": web_receipts,
         "web_observations": web_observations,
