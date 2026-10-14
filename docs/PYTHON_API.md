@@ -385,7 +385,7 @@ Typed tuning is `model`, `reasoning_effort`, `reasoning_summary` (`auto`, `conci
 
 `get_effective_config()` uses app-server `config/read`, not the same child process as `exec`; it returns only selected non-secret primitive fields and layer source types. Its result is diagnostic and must not be reported as an exact effective config for another run. For MCPs, `list_configured_mcps()` reports configured/enabled/advertised-tool state separately from callability, child visibility and per-run effectiveness. `list_effective_skills()` has the same diagnostic-child boundary. `get_effective_capabilities(include_diagnostics=True)` groups those three diagnostic responses, but never upgrades them to `EFFECTIVE_FOR_RUN`. `config_policy="isolated"` is not supported by the diagnostic app-server because it has no equivalent to exec's `--ignore-user-config`; the API returns `NOT_SUPPORTED` for those diagnostic fields instead of guessing. AGENTS loading is not acknowledged by `codex exec`; the marker script requires an explicit `--allow-unfiltered-mcps` acknowledgement before it can start a model run.
 
-### Per-run Codex web search (Bridge 1.3.0)
+### Per-run Codex web search (Bridge 1.4.0)
 
 For an explicitly authorized research run, pass a `web_search` override. It controls the *native Codex search tool*, not OS/sandbox networking. It is available with `config_policy="isolated"` (where it must be the **only** override) and `config_policy="explicit"`. `project` rejects overrides. The selected mode is passed as `-c web_search="<mode>"` to `codex exec`.
 
