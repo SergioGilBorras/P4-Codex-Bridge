@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import re
 from urllib.parse import urlsplit
 
 MAX_EVENTS = 256
@@ -41,6 +42,15 @@ def safe_public_https_url(value: object) -> str | None:
             return None
         except ValueError:
             pass
+        # Reject suspicious paths even for opaque fingerprints: short,
+        # guessable secrets could otherwise be tested by dictionary attacks.
+        segments = [part for part in parts.path.lower().split("/") if part]
+        if (len(parts.path) > 256 or "%" in parts.path or "@" in parts.path
+                or any(len(part) > 64 or re.search(
+                    r"(^|[-_.])(token|secret|password|private|credential|api[-_]?key|auth)([-_.]|$)",
+                    part,
+                ) for part in segments)):
+            return None
         # For an untrusted URL: do not preserve path/query from a potentially
         # secret-bearing task. A hostname-only locator is not a page citation.
         return f"https://{host}/"
