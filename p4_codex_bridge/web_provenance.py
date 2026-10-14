@@ -126,7 +126,11 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
                 continue
             state = "PAGE_OPEN_OBSERVED" if kind == "open_page" and val == action.get("url") else "SOURCE_DISCOVERED"
             exact_page = safe_public_page_url(val)
-            # The digest distinguishes pages at the same host without exporting paths.\n            # Only allow paths with the same conservative safety constraints as public citations.\n            safe_fingerprint_url = exact_page or (val if isinstance(val, str) and val == origin else None)\n            digest = hashlib.sha256(safe_fingerprint_url.encode("utf-8")).hexdigest() if safe_fingerprint_url else None\n            key = (state, exact_page or origin, digest)
+            # The digest distinguishes pages at the same host without exporting paths.
+            # Only allow paths with the same conservative safety constraints as public citations.
+            safe_fingerprint_url = exact_page or (val if isinstance(val, str) and val == origin else None)
+            digest = hashlib.sha256(safe_fingerprint_url.encode("utf-8")).hexdigest() if safe_fingerprint_url else None
+            key = (state, exact_page or origin, digest)
             if key in seen:
                 continue
             seen.add(key)
