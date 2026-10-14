@@ -4,7 +4,7 @@ import unittest
 
 from p4_codex_bridge.models import RunResult
 from p4_codex_bridge.web_provenance import (
-    extract_web_observations, safe_public_https_url,
+    extract_web_observations, safe_public_https_url, to_p4_web_receipts,
 )
 
 
@@ -61,6 +61,24 @@ class WebProvenanceTests(unittest.TestCase):
         oversized = extract_web_observations(b"x" * 1_100_000)
         self.assertTrue(oversized["truncated"])
         self.assertEqual(oversized["status"], "NOT_ATTESTED")
+
+    def test_consumer_receipts_match_p4_without_claiming_page_verification(self):
+        observations = extract_web_observations(
+            event({"type": "web_search", "action": {"type": "open_page",
+                  "url": "https://docs.python.org/3/library/"}})
+        )
+        receipts = to_p4_web_receipts(observations)
+        self.assertEqual(receipts, [{
+            "kind": "WEB_SEARCH_EVENT_OBSERVED",
+            "operation": "open_page",
+            "source_urls": ["https://docs.python.org/"],
+            "page_content_confirmed": False,
+        }])
+        self.assertEqual(to_p4_web_receipts({"sources": [
+            {"state": "SOURCE_DISCOVERED", "origin": "https://127.0.0.1/"},
+            {"state": "SOURCE_DISCOVERED", "origin": "https://example.org/?api_key=x"},
+            {"state": "PAGE_CONTENT_CONFIRMED", "origin": "https://example.org/"},
+        ]}), [])
 
     def test_run_result_remains_compatible_with_old_payload(self):
         old = RunResult(ok=True, bridge_run_id="br_1", exit_code=0, content="ok", stderr="")
