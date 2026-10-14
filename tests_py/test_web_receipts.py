@@ -59,7 +59,14 @@ class WebReceiptsTests(unittest.TestCase):
                "https://example.internal/path", "https://192.168.1.2/",
                "https://[::1]/", "https://example.com/?key=1",
                "https://example.com/#secret", "https://user@example.com/",
-               "https://example.com/" + "x" * 1000, "https://example.com\\@evil.com"]
+               "https://example.com/" + "x" * 1000, "https://example.com\\@evil.com",
+               "https://example.com/users/alice/license",
+               "https://example.com/download?token=abc",
+               "https://example.com/files/%70assword",
+               "https://example.com/api_key/xyz",
+               "https://example.com/credentials.json",
+               "https://example.com/@private/path",
+               "https://example.com/files/password=abc"]
         for url in bad:
             with self.subTest(url=url[:70]):
                 self.assertIsNone(safe_public_url(url))
