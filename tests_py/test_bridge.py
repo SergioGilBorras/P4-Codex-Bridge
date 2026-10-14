@@ -92,6 +92,8 @@ elif "exec" in args:
         content = "malformed last output"
     elif model == "last-missing":
         content = "final text"
+    elif model == "web":
+        content = "Web test complete"
     elif model == "args":
         content = json.dumps(args)
     elif model == "unicode":
@@ -106,6 +108,12 @@ elif "exec" in args:
     if model != "no-session":
         thread_id = "-invalid-session" if model == "invalid-session" else "fake-session-123"
         print(json.dumps({"type":"thread.started", "thread_id":thread_id}), flush=True)
+    if model == "web":
+        print(json.dumps({"type":"item.completed", "item":{
+            "type":"web_search", "action":{"type":"search", "query":"private secret"},
+            "results":[{"url":"https://docs.python.org/3/library/asyncio.html"},
+                       {"url":"https://127.0.0.1/admin"},
+                       {"url":"https://example.org/?token=private"}]}}), flush=True)
     print(json.dumps({"type":"item.completed", "item":{"type":"agent_message", "text":content}}), flush=True)
 else:
     sys.exit(2)
@@ -272,6 +280,27 @@ class BridgeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported Codex config override key"):
             self.bridge.run("x", cwd=self.cwd, config_policy="explicit",
                             config_overrides={"skip_git_repo_check": True})
+
+    def test_exec_web_receipts_roundtrip_without_raw_output(self):
+        result = self.bridge.run(
+            "safe public docs search", cwd=self.cwd, model="web",
+            config_policy="isolated", config_overrides={"web_search": "live"},
+        )
+        self.assertTrue(result.ok, result.error)
+        self.assertIsNone(result.raw_output)
+        self.assertEqual(result.web_receipts, [{
+            "kind": "WEB_SEARCH_EVENT_OBSERVED",
+            "operation": "search",
+            "source_urls": ["https://docs.python.org/3/library/asyncio.html"],
+            "page_content_confirmed": False,
+        }])
+        self.assertNotIn("secret", repr(result.web_receipts))
+        self.assertNotIn("token", repr(result.web_receipts))
+        off = self.bridge.run(
+            "no search", cwd=self.cwd, model="web",
+            config_policy="isolated", config_overrides={"web_search": "disabled"},
+        )
+        self.assertEqual(off.web_receipts, [])
 
     def test_scoped_web_search_override_is_validated_before_dispatch(self):
         for mode in ("disabled", "cached", "indexed", "live"):
