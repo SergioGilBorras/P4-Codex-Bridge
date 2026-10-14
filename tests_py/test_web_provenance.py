@@ -52,6 +52,9 @@ class WebProvenanceTests(unittest.TestCase):
             "https://user:pass@example.com/", "https://example.com/?token=abc",
             "https://example.com/#private", "https://example.com:8443/",
             "https://metadata.internal/path", "https://example.com/space here",
+            "https://example.com/secret/reset",
+            "https://example.com/path%2Ftoken",
+            "https://example.com/" + "x" * 70,
             "https://example.com/" + "x" * 900,
         )
         for url in bad:
