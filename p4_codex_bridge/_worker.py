@@ -17,6 +17,7 @@ from portable_tempdirs import temporary_directory
 
 from .models import RunStatus
 from .registry import RunRegistry
+from .web_evidence import WebEvidenceCollector
 from .runtime import build_exec_argv, codex_environment, extract_session_id, is_valid_session_id, parse_exec_output, redact, redact_structured
 
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -278,10 +279,12 @@ def _execute_with_temp_directory(
     stderr = bytearray()
     lock = threading.Lock()
     exceeded = threading.Event()
+    web_receipts = WebEvidenceCollector(run_id)
     def record_exec_event(line: bytes) -> None:
         try: event = json.loads(line.decode("utf-8", "replace"))
         except (json.JSONDecodeError, UnicodeError): return
         if not isinstance(event, dict): return
+        web_receipts.observe(event)
         kind = event.get("type")
         if kind == "thread.started":
             native_id = event.get("thread_id")
@@ -395,6 +398,8 @@ def _execute_with_temp_directory(
         "structured_output": redact_structured(structured),
         "session_id": session_id,
         "raw_output": redact(bytes(stdout).decode("utf-8", "replace")) if request.get("include_raw_output") else None,
+        "web_search_status": web_receipts.status,
+        "web_evidence": web_receipts.receipts,
         "error": {"code": error_code, "message": redact(error)} if error else None,
         "duration_ms": int((time.monotonic() - started) * 1000),
     }
