@@ -34,3 +34,16 @@ Capabilities have three distinct layers: **bridge implementation**, **installed 
 For programmatic inspection, use `CodexBridge.get_capabilities()` and documented app-server diagnostic APIs, then verify required features before submission. The `get_capabilities()["exec"]["skip_git_repo_check"]` entry reports a boolean detected from CLI help; the corresponding `skip_git_repo_check_capability` entry adds provenance/status.
 
 Do not infer capabilities from a Codex CLI version number alone. If the CLI, account, project trust or app-server schema changes, inspect again. See [version compatibility](VERSION_COMPATIBILITY.md), [security](SECURITY.md) and [roadmap](ROADMAP.md).
+
+## Which observation to inspect
+
+| Question | Narrowest available evidence | Limitation |
+|---|---|---|
+| CLI flags, versions and model controls | `CodexBridge.get_capabilities()`, installed `codex --help` / `codex exec --help` | Does not prove entitlement or actual run permissions |
+| Available model names | Installed `model/list` discovery | Does not prove access to each listed model |
+| Configured MCP servers and tools | `list_configured_mcps()` in a diagnostic app-server | Does not prove tool callability in a separate exec child |
+| Advertised skills | `list_effective_skills()` diagnostic | Does not prove they were loaded in the matching run |
+| Local run state and events | `p4-codex ps`, `inspect`, `watch`, `resources` | Does not prove unobserved message deltas or side effects |
+| Host/IDE connector visibility | Live host-side tool discovery | Host handles are not automatically inherited by Codex child processes |
+
+Prefer the narrowest read-only evidence; never invoke a potentially destructive integration merely to test availability. Track `CONFIGURED`, `ADVERTISED`, `CHILD_VISIBLE` and `EFFECTIVE_FOR_RUN` independently. See [MCP](MCP.md) and [skills](SKILLS.md).
