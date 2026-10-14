@@ -391,7 +391,16 @@ def _execute_with_temp_directory(
     if isinstance(overrides, dict) and overrides.get("web_search") in ("cached", "indexed", "live"):
         from .web_provenance import extract_web_observations
         web_observations = extract_web_observations(bytes(stdout))
+    web_receipts = None
+    if web_observations is not None:
+        web_receipts = [
+            {"kind": "WEB_SEARCH_EVENT_OBSERVED",
+             "operation": "open_page" if source["state"] == "PAGE_OPEN_OBSERVED" else "search",
+             "source_urls": [source["origin"]], "page_content_confirmed": False}
+            for source in web_observations["sources"]
+        ]
     result = {
+        "web_receipts": web_receipts,
         "web_observations": web_observations,
         "ok": terminal == RunStatus.COMPLETED and error is None,
         "bridge_run_id": run_id,
