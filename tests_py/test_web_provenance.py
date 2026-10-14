@@ -1,4 +1,5 @@
 """Offline provenance tests: events are observations, assistant prose is not."""
+import hashlib
 import json
 import unittest
 
@@ -21,8 +22,12 @@ class WebProvenanceTests(unittest.TestCase):
         result = extract_web_observations(raw)
         self.assertEqual(result["status"], "SEARCH_OBSERVED")
         self.assertEqual(result["sources"], [
-            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/"},
-            {"state": "PAGE_OPEN_OBSERVED", "origin": "https://github.com/"},
+            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/",
+             "url_sha256": hashlib.sha256(b"https://docs.python.org/3/library/").hexdigest()},
+            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/",
+             "url_sha256": hashlib.sha256(b"https://docs.python.org/3/other").hexdigest()},
+            {"state": "PAGE_OPEN_OBSERVED", "origin": "https://github.com/",
+             "url_sha256": hashlib.sha256(b"https://github.com/example/project").hexdigest()},
         ])
         self.assertFalse(result["page_content_confirmed"])
         self.assertNotIn("do not persist", json.dumps(result))
@@ -71,9 +76,11 @@ class WebProvenanceTests(unittest.TestCase):
         self.assertEqual(receipts, [{
             "kind": "WEB_SEARCH_EVENT_OBSERVED",
             "operation": "open_page",
+            "url_sha256": hashlib.sha256(b"https://docs.python.org/3/library/").hexdigest(),
             "source_urls": ["https://docs.python.org/"],
             "page_content_confirmed": False,
         }])
+        self.assertNotIn("/3/library/", repr(receipts))
         self.assertEqual(to_p4_web_receipts({"sources": [
             {"state": "SOURCE_DISCOVERED", "origin": "https://127.0.0.1/"},
             {"state": "SOURCE_DISCOVERED", "origin": "https://example.org/?api_key=x"},
