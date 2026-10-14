@@ -12,7 +12,7 @@ from p4_codex_bridge.scheduler import ResourceScheduler, RuntimeLimits, canonica
 class SchedulerTests(unittest.TestCase):
     def test_public_exports_hide_scheduler_implementation(self):
         import p4_codex_bridge
-        self.assertEqual(p4_codex_bridge.__version__, "1.4.0")
+        self.assertEqual(p4_codex_bridge.__version__, "1.4.1")
         self.assertFalse(hasattr(p4_codex_bridge, "ResourceScheduler"))
         self.assertFalse(hasattr(p4_codex_bridge, "canonical_workspace"))
         self.assertTrue(hasattr(p4_codex_bridge, "CodexBridge"))

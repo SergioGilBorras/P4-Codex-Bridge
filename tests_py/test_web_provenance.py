@@ -1,4 +1,5 @@
 """Offline provenance tests: events are observations, assistant prose is not."""
+import hashlib
 import json
 import unittest
 
@@ -21,8 +22,8 @@ class WebProvenanceTests(unittest.TestCase):
         result = extract_web_observations(raw)
         self.assertEqual(result["status"], "SEARCH_OBSERVED")
         self.assertEqual(result["sources"], [
-            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/", "page_url": "https://docs.python.org/3/library/"},
-            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/", "page_url": "https://docs.python.org/3/other"},
+            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/", "page_url": "https://docs.python.org/3/library/", "url_sha256": hashlib.sha256(b"https://docs.python.org/3/library/").hexdigest()},
+            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/", "page_url": "https://docs.python.org/3/other", "url_sha256": hashlib.sha256(b"https://docs.python.org/3/other").hexdigest()},
             {"state": "PAGE_OPEN_OBSERVED", "origin": "https://github.com/"},
         ])
         self.assertFalse(result["page_content_confirmed"])
@@ -74,6 +75,7 @@ class WebProvenanceTests(unittest.TestCase):
             "operation": "open_page",
             "source_urls": ["https://docs.python.org/3/library/"],
             "page_content_confirmed": False,
+            "url_sha256": hashlib.sha256(b"https://docs.python.org/3/library/").hexdigest(),
         }])
         self.assertEqual(to_p4_web_receipts({"sources": [
             {"state": "SOURCE_DISCOVERED", "origin": "https://127.0.0.1/"},
@@ -140,6 +142,39 @@ class WebProvenanceTests(unittest.TestCase):
             "source_urls": ["https://docs.python.org/3/library/"],
             "page_content_confirmed": False,
         }])
+
+    def test_safe_exact_page_hash_is_additive_and_correlated(self):
+        import hashlib
+        url = "https://docs.python.org/3/library/asyncio.html"
+        observed = extract_web_observations(event({
+            "type": "web_search",
+            "action": {"type": "open_page", "url": url},
+        }))
+        digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        self.assertEqual(observed["sources"][0]["url_sha256"], digest)
+        receipt = to_p4_web_receipts(observed)[0]
+        self.assertEqual(receipt["source_urls"], [url])
+        self.assertEqual(receipt["url_sha256"], digest)
+        self.assertIs(receipt["page_content_confirmed"], False)
+        tampered = {"sources": [{
+            **observed["sources"][0],
+            "url_sha256": "0" * 64,
+        }]}
+        self.assertEqual(to_p4_web_receipts(tampered), [])
+        origin_only = {"sources": [{"state": "SOURCE_DISCOVERED",
+                                   "origin": "https://github.com/", "url_sha256": digest}]}
+        self.assertEqual(to_p4_web_receipts(origin_only), [])
+
+    def test_untrusted_paths_never_gain_fingerprints(self):
+        observed = extract_web_observations(event({
+            "type": "web_search",
+            "action": {"type": "open_page",
+                       "url": "https://github.com/private-repository/secret-token"},
+        }))
+        self.assertEqual(observed["sources"], [{
+            "state": "PAGE_OPEN_OBSERVED", "origin": "https://github.com/",
+        }])
+        self.assertNotIn("url_sha256", to_p4_web_receipts(observed)[0])
 
     def test_run_result_remains_compatible_with_old_payload(self):
         old = RunResult(ok=True, bridge_run_id="br_1", exit_code=0, content="ok", stderr="")

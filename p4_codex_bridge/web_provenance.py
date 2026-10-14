@@ -5,6 +5,7 @@ No search queries, page text, auth data, or model reasoning are persisted.
 """
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 from urllib.parse import urlsplit
@@ -125,7 +126,11 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
                 continue
             state = "PAGE_OPEN_OBSERVED" if kind == "open_page" and val == action.get("url") else "SOURCE_DISCOVERED"
             exact_page = safe_public_page_url(val)
-            key = (state, exact_page or origin)
+            # The digest distinguishes pages at the same host without exporting paths.
+            # Only allow paths with the same conservative safety constraints as public citations.
+            safe_fingerprint_url = exact_page
+            digest = hashlib.sha256(safe_fingerprint_url.encode("utf-8")).hexdigest() if safe_fingerprint_url else None
+            key = (state, exact_page or origin, digest)
             if key in seen:
                 continue
             seen.add(key)
@@ -135,6 +140,8 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
             record = {"state": state, "origin": origin}
             if exact_page is not None:
                 record["page_url"] = exact_page
+            if digest is not None:
+                record["url_sha256"] = digest
             sources.append(record)
         if len(sources) == MAX_SOURCES:
             break
@@ -168,10 +175,19 @@ def to_p4_web_receipts(observations: object) -> list[dict[str, object]]:
         if exact_page is not None and (safe_public_page_url(exact_page) != exact_page
                                        or safe_public_https_url(exact_page) != origin):
             continue
-        receipts.append({
+        digest = source.get("url_sha256")
+        if digest is not None and (not isinstance(digest, str) or len(digest) != 64
+                                   or any(ch not in "0123456789abcdef" for ch in digest)):
+            continue
+        if digest is not None and (exact_page is None or digest != hashlib.sha256(exact_page.encode("utf-8")).hexdigest()):
+            continue
+        receipt = {
             "kind": "WEB_SEARCH_EVENT_OBSERVED",
             "operation": "open_page" if state == "PAGE_OPEN_OBSERVED" else "search",
             "source_urls": [exact_page or origin],
             "page_content_confirmed": False,
-        })
+        }
+        if digest is not None:
+            receipt["url_sha256"] = digest
+        receipts.append(receipt)
     return receipts
