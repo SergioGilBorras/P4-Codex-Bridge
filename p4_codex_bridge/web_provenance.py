@@ -128,7 +128,7 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
             exact_page = safe_public_page_url(val)
             # The digest distinguishes pages at the same host without exporting paths.
             # Only allow paths with the same conservative safety constraints as public citations.
-            safe_fingerprint_url = exact_page or (val if isinstance(val, str) and val == origin else None)
+            safe_fingerprint_url = exact_page
             digest = hashlib.sha256(safe_fingerprint_url.encode("utf-8")).hexdigest() if safe_fingerprint_url else None
             key = (state, exact_page or origin, digest)
             if key in seen:
