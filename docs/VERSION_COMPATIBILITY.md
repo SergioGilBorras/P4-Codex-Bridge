@@ -2,7 +2,7 @@
 
 ## Supported environment
 
-- **P4-Codex-Bridge 1.4.0** development source; no published package release is claimed.
+- **P4-Codex-Bridge 1.4.1** development source; no published package release is claimed.
 - Python **3.11+**. Python 3.10 or older is unsupported.
 - `portable-tempdirs 0.1.2`, installed from its pinned Git commit `fd6dbd640630e6911a53b4d756089099ec870a8b`; installation requires access to the source or an approved offline artifact.
 - Official Codex CLI installed and authenticated for the current operating-system user. Model availability, `codex exec` flags and app-server RPCs depend on the **installed** CLI and the account; they are not guaranteed by the Bridge version.
@@ -14,7 +14,7 @@
 
 The **per-execution web-search configuration** accepts `disabled`, `cached`, `indexed` or `live`. With `config_policy="isolated"`, `web_search` must be the **only** config override; `config_policy="explicit"` permits other validated overrides. `project` rejects overrides. Bridge forwards the mode through `-c web_search=...` without enabling OS shell network access or per-run MCP permissions.
 
-**A requested mode is not a search receipt.** Bridge 1.4.0 cannot certify which website was visited or which citations are correct. Consumers needing third-party code must corroborate sources and require their own approval gates. A typed `RunSecurityPolicy` and read-only sandbox are not proof of MCP isolation.
+**A requested mode is not a search receipt.** Bridge 1.4.1 cannot certify which website was visited or which citations are correct. Consumers needing third-party code must corroborate sources and require their own approval gates. A typed `RunSecurityPolicy` and read-only sandbox are not proof of MCP isolation.
 
 ## Checking a concrete installation
 
