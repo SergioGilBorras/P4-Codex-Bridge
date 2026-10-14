@@ -28,6 +28,24 @@ class RealSmokeScriptTests(unittest.TestCase):
                 self.assertIn("usage:", result.stdout.lower())
                 self.assertIn("--help", result.stdout)
 
+    def test_python_api_smoke_is_opt_in_and_exposes_help(self) -> None:
+        command = [sys.executable, "-m", "tests_py.smoke_codex"]
+        help_result = subprocess.run(
+            [*command, "--help"], cwd=ROOT, capture_output=True,
+            text=True, timeout=15, check=False,
+        )
+        self.assertEqual(help_result.returncode, 0, help_result.stderr)
+        self.assertIn("--run-real-turn", help_result.stdout)
+        self.assertIn("--help", help_result.stdout)
+
+        no_auth = subprocess.run(
+            command, cwd=ROOT, capture_output=True,
+            text=True, timeout=15, check=False,
+        )
+        self.assertEqual(no_auth.returncode, 2)
+        self.assertIn("live inference disabled by default", no_auth.stderr)
+        self.assertNotIn("codex", no_auth.stdout.lower())
+
     def test_live_watch_script_bootstraps_project_import_when_run_by_path(self) -> None:
         code = (
             "import pathlib, sys; "
