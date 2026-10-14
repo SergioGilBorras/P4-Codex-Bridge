@@ -5,7 +5,7 @@ implementation details. Importing the package root performs no runtime startup.
 """
 from importlib import import_module
 
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 
 _EXPORTS = {
     "CodexBridge": ("client", "CodexBridge"),
