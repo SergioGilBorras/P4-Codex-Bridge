@@ -47,6 +47,40 @@ def safe_public_https_url(value: object) -> str | None:
         return None
 
 
+# Exact citations are emitted only for selected public documentation hosts.
+# Arbitrary paths may contain user secrets, so all others stay origin-only.
+_PUBLIC_DOC_HOSTS = frozenset({
+    "docs.python.org", "developer.mozilla.org", "docs.djangoproject.com",
+    "docs.rs", "nodejs.org", "www.typescriptlang.org",
+})
+_SENSITIVE_PATH_PARTS = frozenset({
+    "private", "internal", "secret", "secrets", "token", "tokens",
+    "password", "passwords", "credential", "credentials", "apikey",
+    "api_key", "auth", "session", "users", "user", "account", "accounts",
+})
+
+
+def safe_public_page_url(value: object) -> str | None:
+    """Preserve a bounded public documentation page locator, not page content."""
+    if safe_public_https_url(value) is None or not isinstance(value, str):
+        return None
+    try:
+        parts = urlsplit(value)
+        if parts.hostname not in _PUBLIC_DOC_HOSTS:
+            return None
+        path = parts.path
+        if not (path.startswith("/") and len(path) <= 256) or "//" in path:
+            return None
+        if any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-" for c in path):
+            return None
+        segments = [part for part in path.lower().split("/") if part]
+        if len(segments) > 12 or any(part in _SENSITIVE_PATH_PARTS or part in (".", "..") or len(part) > 56 for part in segments):
+            return None
+        return f"https://{parts.hostname}{path}"
+    except (ValueError, UnicodeError):
+        return None
+
+
 def extract_web_observations(raw: bytes) -> dict[str, object]:
     """Return conservative hostname observations from explicit web_search JSONL.
 
@@ -90,14 +124,18 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
             if origin is None:
                 continue
             state = "PAGE_OPEN_OBSERVED" if kind == "open_page" and val == action.get("url") else "SOURCE_DISCOVERED"
-            key = (state, origin)
+            exact_page = safe_public_page_url(val)
+            key = (state, exact_page or origin)
             if key in seen:
                 continue
             seen.add(key)
             if len(sources) == MAX_SOURCES:
                 truncated = True
                 break
-            sources.append({"state": state, "origin": origin})
+            record = {"state": state, "origin": origin}
+            if exact_page is not None:
+                record["page_url"] = exact_page
+            sources.append(record)
         if len(sources) == MAX_SOURCES:
             break
     return {
@@ -126,10 +164,13 @@ def to_p4_web_receipts(observations: object) -> list[dict[str, object]]:
         state = source.get("state")
         if safe_public_https_url(origin) != origin or state not in ("PAGE_OPEN_OBSERVED", "SOURCE_DISCOVERED"):
             continue
+        exact_page = source.get("page_url")
+        if exact_page is not None and safe_public_page_url(exact_page) != exact_page:
+            continue
         receipts.append({
             "kind": "WEB_SEARCH_EVENT_OBSERVED",
             "operation": "open_page" if state == "PAGE_OPEN_OBSERVED" else "search",
-            "source_urls": [origin],
+            "source_urls": [exact_page or origin],
             "page_content_confirmed": False,
         })
     return receipts
