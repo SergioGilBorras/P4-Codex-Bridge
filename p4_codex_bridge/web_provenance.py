@@ -69,12 +69,12 @@ def safe_public_page_url(value: object) -> str | None:
         if parts.hostname not in _PUBLIC_DOC_HOSTS:
             return None
         path = parts.path
-        if not (path.startswith("/") and len(path) <= 256):
+        if not (path.startswith("/") and len(path) <= 256) or "//" in path:
             return None
         if any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-" for c in path):
             return None
         segments = [part for part in path.lower().split("/") if part]
-        if len(segments) > 12 or any(part in _SENSITIVE_PATH_PARTS or len(part) > 56 for part in segments):
+        if len(segments) > 12 or any(part in _SENSITIVE_PATH_PARTS or part in (".", "..") or len(part) > 56 for part in segments):
             return None
         return f"https://{parts.hostname}{path}"
     except (ValueError, UnicodeError):
