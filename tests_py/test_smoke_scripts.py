@@ -50,7 +50,7 @@ class RealSmokeScriptTests(unittest.TestCase):
                 self.assertIn("live inference disabled by default", result.stderr)
 
     def test_python_api_smoke_is_opt_in_and_exposes_help(self) -> None:
-        command = [sys.executable, "-m", "tests_py.smoke_codex"]
+        command = [sys.executable, str(ROOT / "tests_real" / "smoke_codex.py")]
         help_result = subprocess.run(
             [*command, "--help"], cwd=ROOT, capture_output=True,
             text=True, timeout=15, check=False,
