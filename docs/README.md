@@ -6,7 +6,7 @@ This index describes the **current 1.3.0 development source tree (not published)
 
 - [Installation](INSTALLATION.md) — install, CLI preflight and Windows invocation.
 - [Python API](PYTHON_API.md) — public `CodexBridge` methods, signatures and usage.
-- [Web search by execution](PYTHON_API.md#per-run-codex-web-search-bridge-130) — available in 1.3.0: modes, isolated configuration, source-verification and safety requirements.
+- [Web search by execution](PYTHON_API.md#per-run-codex-web-search-bridge-130) and [event provenance](WEB_PROVENANCE.md) — available in 1.3.0: modes, isolated configuration, source-verification and safety requirements.
 - [Execution contract](CONTRACT.md) — run arguments, results and error handling.
 - [CLI](CLI.md) — operator commands and JSON/JSONL behavior.
 - [Architecture](ARCHITECTURE.md) — components and state ownership.
