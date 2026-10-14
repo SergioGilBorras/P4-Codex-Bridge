@@ -4,7 +4,7 @@ import unittest
 
 from p4_codex_bridge.models import RunResult
 from p4_codex_bridge.web_provenance import (
-    extract_web_observations, safe_public_https_url, to_p4_web_receipts,
+    extract_web_observations, safe_public_https_url, safe_public_page_url, to_p4_web_receipts,
 )
 
 
@@ -21,12 +21,13 @@ class WebProvenanceTests(unittest.TestCase):
         result = extract_web_observations(raw)
         self.assertEqual(result["status"], "SEARCH_OBSERVED")
         self.assertEqual(result["sources"], [
-            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/"},
+            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/", "page_url": "https://docs.python.org/3/library/"},
+            {"state": "SOURCE_DISCOVERED", "origin": "https://docs.python.org/", "page_url": "https://docs.python.org/3/other"},
             {"state": "PAGE_OPEN_OBSERVED", "origin": "https://github.com/"},
         ])
         self.assertFalse(result["page_content_confirmed"])
         self.assertNotIn("do not persist", json.dumps(result))
-        self.assertNotIn("/library/", json.dumps(result))
+        self.assertFalse(result["page_content_confirmed"])
 
     def test_no_observed_search_does_not_promote_assistant_urls(self):
         result = extract_web_observations(event(
@@ -71,7 +72,7 @@ class WebProvenanceTests(unittest.TestCase):
         self.assertEqual(receipts, [{
             "kind": "WEB_SEARCH_EVENT_OBSERVED",
             "operation": "open_page",
-            "source_urls": ["https://docs.python.org/"],
+            "source_urls": ["https://docs.python.org/3/library/"],
             "page_content_confirmed": False,
         }])
         self.assertEqual(to_p4_web_receipts({"sources": [
@@ -79,6 +80,43 @@ class WebProvenanceTests(unittest.TestCase):
             {"state": "SOURCE_DISCOVERED", "origin": "https://example.org/?api_key=x"},
             {"state": "PAGE_CONTENT_CONFIRMED", "origin": "https://example.org/"},
         ]}), [])
+
+    def test_exact_public_documentation_link_and_untrusted_paths(self):
+        accepted = (
+            "https://docs.python.org/3/library/asyncio.html",
+            "https://developer.mozilla.org/en-US/docs/Web/HTTP",
+        )
+        for url in accepted:
+            with self.subTest(url=url):
+                self.assertEqual(safe_public_page_url(url), url)
+        rejected = (
+            "https://github.com/example/private-project",
+            "https://docs.python.org/account/secret",
+            "https://docs.python.org/3/library/%2e%2e/secret",
+            "https://docs.python.org/3/library/?access_token=abc",
+            "https://docs.python.org/private/internal",
+            "https://docs.python.org/path/" + "a" * 64,
+        )
+        for url in rejected:
+            with self.subTest(url=url):
+                self.assertIsNone(safe_public_page_url(url))
+
+    def test_source_without_exact_page_remains_a_domain_hint(self):
+        observations = extract_web_observations(event({
+            "type": "web_search",
+            "action": {"type": "open_page", "url": "https://github.com/example/project"},
+        }))
+        self.assertEqual(observations["sources"], [{
+            "state": "PAGE_OPEN_OBSERVED", "origin": "https://github.com/",
+        }])
+        self.assertEqual(to_p4_web_receipts(observations)[0]["source_urls"], ["https://github.com/"])
+
+    def test_tampered_public_page_is_never_forwarded(self):
+        self.assertEqual(to_p4_web_receipts({"sources": [{
+            "state": "SOURCE_DISCOVERED",
+            "origin": "https://docs.python.org/",
+            "page_url": "https://docs.python.org/private/token",
+        }]}), [])
 
     def test_run_result_remains_compatible_with_old_payload(self):
         old = RunResult(ok=True, bridge_run_id="br_1", exit_code=0, content="ok", stderr="")
