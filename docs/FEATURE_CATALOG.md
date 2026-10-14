@@ -1,6 +1,6 @@
 # Current feature catalog
 
-This page describes the current P4-Codex-Bridge 1.4.0 development source tree (not published). **Implemented** means a bridge code path exists with offline tests, not that a particular Codex CLI installation or account supports it. **Partial** means supported with explicit limits. **Unavailable** means no general supported bridge interface.
+This page describes the current P4-Codex-Bridge 1.4.1 development source tree (not published). **Implemented** means a bridge code path exists with offline tests, not that a particular Codex CLI installation or account supports it. **Partial** means supported with explicit limits. **Unavailable** means no general supported bridge interface.
 
 | Area | Status | Current behavior / limit |
 |---|---|---|
