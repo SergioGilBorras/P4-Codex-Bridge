@@ -10,7 +10,7 @@ hardware-level durability beyond SQLite and the host filesystem.
 | Current database | RECOVERED | `PRAGMA integrity_check`, known bridge schema version and additive `CREATE IF NOT EXISTS` checks. |
 | Supported schema v1 | RECOVERED | Runtime manager migrates additively to v2 in one `BEGIN IMMEDIATE` transaction; existing thread/turn rows remain. |
 | Migration interrupted | RECOVERED | SQLite rollback leaves the prior schema/version; retry is idempotent. Offline fault injection denies an `ALTER TABLE`, verifies rollback, then retries successfully. |
-| Legacy initialization marker v3 | RECONCILED | A known marker from an earlier initialization path is normalized to v2 only after required columns/tables are present in the transaction. |
+| Recognized initialization marker v3 | RECONCILED | A recognized marker is normalized to v2 after expected tables and columns have been validated in the transaction; unknown schemas fail closed. |
 | Unknown schema version | FAIL_FAST / MANUAL_ACTION_REQUIRED | Startup refuses to mutate it; doctor reports `UNKNOWN_SCHEMA`. Back up and use a bridge version with a matching migration. |
 | Corrupt database | UNHEALTHY / MANUAL_ACTION_REQUIRED | Read-only `database_health()` reports integrity/error status and does not alter the bytes. Stop the service, preserve a copy, then restore from a known backup; no automatic repair is attempted. |
 | Database locked by another connection | DEGRADED | Schema initialization uses a bounded 2-second SQLite busy timeout and returns the SQLite lock error. Releasing the owner allows a clean retry; no schema change is committed. |
