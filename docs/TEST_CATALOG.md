@@ -13,7 +13,7 @@ Tests run with the intended Python interpreter. Windows launcher diagnostics req
 
 | Source | Scope |
 |---|---|
-| `tests_py/test_bridge.py` | Direct/managed exec, ephemeral/persistent session arguments and IDs, persistent ID failure, resume identity/schema gates, `skip_git_repo_check`, capability gating, stdin safety, timeouts, outputs and process control |
+| `tests_py/test_bridge.py` | Direct/managed exec, 1.3.0 per-run `web_search` mode/isolated-config and CLI `-c` propagation, ephemeral/persistent session arguments and IDs, persistent ID failure, resume identity/schema gates, `skip_git_repo_check`, capability gating, stdin safety, timeouts, outputs and process control |
 | `tests_py/test_public_api.py` | Package-root export boundary and typed, closed public signatures, including `ephemeral` |
 | `tests_py/test_scheduler.py` | SQLite queue, limits, locks, managed dispatch and recovery |
 | `tests_py/test_runtime_manager.py`, `test_app_server_events.py` | Experimental JSON-RPC manager, lifecycle, streams and approvals |

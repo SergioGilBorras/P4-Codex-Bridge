@@ -2,7 +2,7 @@
 
 P4-Codex-Bridge is a Python interface and operator CLI for the locally installed OpenAI Codex CLI. It uses the user's existing Codex authentication and provides execution controls, lifecycle tracking, observability, and experimental app-server integrations.
 
-**Current source version: 1.2.0 (development, not published).** This repository is a Python implementation; no Node.js bridge runtime or JavaScript API is provided. Node.js may still be required by a particular Codex CLI installation.
+**Current source version: 1.3.0 (development, not published).** This repository is a Python implementation; no Node.js bridge runtime or JavaScript API is provided. Node.js may still be required by a particular Codex CLI installation.
 
 ## What works today
 
@@ -18,7 +18,7 @@ P4-Codex-Bridge is a Python interface and operator CLI for the locally installed
 
 ## Requirements
 
-- Python 3.11+ (the 1.2.0 development line drops the previous Python 3.10 support).
+- Python 3.11+ (support for Python 3.10 ended with 1.2.0).
 - `portable-tempdirs` is pinned to an immutable upstream Git commit for managed temporary directories; see [installation](docs/INSTALLATION.md) for Git/offline and publication constraints.
 - An installed Codex CLI and authentication through its supported login mechanism.
 - A real, existing `cwd` for Codex calls; creating a new directory or a Git repository is not a bridge requirement.
@@ -78,6 +78,36 @@ validated and is used to launch the process, but does not guarantee changing
 the session's stored workspace. Keep the workspace and Codex session data if
 you intend to resume. See [Python API](docs/PYTHON_API.md) for managed/service
 examples and error handling.
+
+## Opt-in web search for a single Codex exec (new in 1.3.0)
+
+Bridge 1.3.0 accepts a **per-execution** `web_search` configuration via `CodexBridge.run()` or managed `start()`, without enabling network access for shell commands. The modes are `disabled` (off), `cached` (search cache), `indexed` (index-gated external browsing) and `live` (current websites), subject to support in the installed Codex CLI. This option does not make Codex search on every turn: it makes the search tool available for the model to choose.
+
+```python
+from p4_codex_bridge import CodexBridge, CodexPermissions, SandboxMode, ApprovalPolicy
+
+workspace = r"C:\work\scratch"  # existing, explicitly authorized
+bridge = CodexBridge(allowed_roots=[workspace])
+result = bridge.run(
+    "Research a public CSV parsing library and give its source URL. Do not change files.",
+    cwd=workspace,
+    permissions=CodexPermissions(
+        sandbox=SandboxMode.READ_ONLY,
+        approval_policy=ApprovalPolicy.NEVER,
+    ),
+    config_policy="isolated",
+    config_overrides={"web_search": "live"},
+    timeout_seconds=120,
+)
+if result.ok:
+    print(result.content)  # verify URLs independently before adoption
+else:
+    print(result.error)
+```
+
+`config_policy="isolated"` accepts **only** `web_search` as a config override; `explicit` also accepts the existing supported typed tuning overrides, while `project` rejects overrides. Neither `READ_ONLY` nor `web_search` guarantees per-run MCP isolation. Do not enable inherited external tools just to search. A successful response does **not** prove a search actually occurred or that cited sites were consulted. Treat discovered information as untrusted and require source checks and any applicable human approval before use.
+
+This feature is an opt-in for Bridge's exec-run APIs, **not** a global TOML option or permission granted to every P4 agent. Consult [Python API](docs/PYTHON_API.md), [configuration](docs/CONFIGURATION.md) and [security](docs/SECURITY.md). Real runs may consume inference and web-search usage; the automated suite uses fake processes and makes no real model calls.
 
 ## Operator CLI
 
