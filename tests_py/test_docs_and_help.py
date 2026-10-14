@@ -25,6 +25,31 @@ class DocumentationAndHelpTests(unittest.TestCase):
                     broken.append(f"{page.relative_to(ROOT)}: {relative}")
         self.assertFalse(broken, "Broken local documentation links: " + "; ".join(broken))
 
+    def test_repository_keeps_live_smokes_and_fake_examples_separate(self):
+        self.assertTrue((ROOT / "tests_real" / "smoke_codex.py").is_file())
+        self.assertTrue((ROOT / "examples" / "scheduler_demo.py").is_file())
+        self.assertFalse((ROOT / "tests_py" / "smoke_codex.py").exists())
+        self.assertFalse((ROOT / "tests_py" / "scheduler_demo.py").exists())
+        self.assertFalse((ROOT / "docs" / "TOOLS_CATALOG.md").exists())
+        self.assertFalse((ROOT / "docs" / "SKILLS_CATALOG.md").exists())
+
+    def test_operational_docs_do_not_advertise_session_inventory(self):
+        paths = [ROOT / "AGENTS.md", ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
+        forbidden = (
+            "TOOLS_CATALOG.md",
+            "SKILLS_CATALOG.md",
+            "18 skills in this session",
+            "tests_py/smoke_codex.py",
+            "tests_py/scheduler_demo.py",
+        )
+        stale = []
+        for page in paths:
+            text = page.read_text(encoding="utf-8")
+            stale.extend(
+                f"{page.relative_to(ROOT)}: {item}" for item in forbidden if item in text
+            )
+        self.assertEqual(stale, [])
+
     def test_operator_cli_help_has_no_model_call(self):
         result = subprocess.run(
             [sys.executable, "-m", "p4_codex_bridge", "--help"],
