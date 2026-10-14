@@ -141,6 +141,36 @@ class WebProvenanceTests(unittest.TestCase):
             "page_content_confirmed": False,
         }])
 
+    def test_safe_exact_page_hash_is_additive_and_correlated(self):
+        import hashlib
+        url = "https://docs.python.org/3/library/asyncio.html"
+        observed = extract_web_observations(event({
+            "type": "web_search",
+            "action": {"type": "open_page", "url": url},
+        }))
+        digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        self.assertEqual(observed["sources"][0]["url_sha256"], digest)
+        receipt = to_p4_web_receipts(observed)[0]
+        self.assertEqual(receipt["source_urls"], [url])
+        self.assertEqual(receipt["url_sha256"], digest)
+        self.assertIs(receipt["page_content_confirmed"], False)
+        tampered = {"sources": [{
+            **observed["sources"][0],
+            "url_sha256": "0" * 64,
+        }]}
+        self.assertEqual(to_p4_web_receipts(tampered), [])
+
+    def test_untrusted_paths_never_gain_fingerprints(self):
+        observed = extract_web_observations(event({
+            "type": "web_search",
+            "action": {"type": "open_page",
+                       "url": "https://github.com/private-repository/secret-token"},
+        }))
+        self.assertEqual(observed["sources"], [{
+            "state": "PAGE_OPEN_OBSERVED", "origin": "https://github.com/",
+        }])
+        self.assertNotIn("url_sha256", to_p4_web_receipts(observed)[0])
+
     def test_run_result_remains_compatible_with_old_payload(self):
         old = RunResult(ok=True, bridge_run_id="br_1", exit_code=0, content="ok", stderr="")
         self.assertIsNone(old.web_observations)
