@@ -393,12 +393,8 @@ def _execute_with_temp_directory(
         web_observations = extract_web_observations(bytes(stdout))
     web_receipts = None
     if web_observations is not None:
-        web_receipts = [
-            {"kind": "WEB_SEARCH_EVENT_OBSERVED",
-             "operation": "open_page" if source["state"] == "PAGE_OPEN_OBSERVED" else "search",
-             "source_urls": [source["origin"]], "page_content_confirmed": False}
-            for source in web_observations["sources"]
-        ]
+        from .web_provenance import to_p4_web_receipts
+        web_receipts = to_p4_web_receipts(web_observations)
     result = {
         "web_receipts": web_receipts,
         "web_observations": web_observations,
