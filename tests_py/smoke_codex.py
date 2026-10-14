@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from tests_py._portable_temp import TemporaryDirectory
@@ -14,6 +15,18 @@ from p4_codex_bridge.runtime import probe, redact
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Optional one-turn read-only Codex smoke test. May consume model usage."
+    )
+    parser.add_argument(
+        "--run-real-turn",
+        action="store_true",
+        help="Explicitly authorize one live Codex turn and its associated usage.",
+    )
+    args = parser.parse_args()
+    if not args.run_real_turn:
+        parser.error("live inference disabled by default; pass --run-real-turn after approval")
+
     workspace = Path(__file__).resolve().parents[1] / "tests" / "smoke_workspace"
     workspace.mkdir(parents=True, exist_ok=True)
     auth = probe(["login", "status"], timeout=15).strip()
