@@ -61,3 +61,8 @@ Resident app-server operations are experimental and must be capability-gated at 
 Common worker error codes include `CODEX_NOT_FOUND`, `CODEX_AUTH_REQUIRED`, `CODEX_TIMEOUT`, `CODEX_EXIT_NONZERO`, `CODEX_EMPTY_RESPONSE`, `STRUCTURED_OUTPUT_INVALID` and `SESSION_ID_UNAVAILABLE`. The last code means a non-ephemeral exec completed without a usable native session ID; the bridge reports failure instead of claiming the conversation can be resumed. Validation and capability failures can raise typed Python exceptions instead of returning a `RunResult`. CLI command exit behavior is documented in [CLI](CLI.md).
 
 For exact signatures and experimental/stable method distinctions see [Python API](PYTHON_API.md). For risk boundaries see [security](SECURITY.md).
+
+
+## Web-search observations
+
+A `RunResult` adds optional `web_evidence` and `web_search_status` (default `NOT_ATTESTED`). These are **run-matched event observations**, not statements from the LLM. Each safe HTTPS URL is normalized and bounded; if Codex omits the matching native event, nothing is attested. Discovery is distinct from an open operation and neither proves webpage content, safety, currency, license, correctness or adoption readiness. Consumers must treat the URLs as untrusted inputs.
