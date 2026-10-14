@@ -449,3 +449,10 @@ The client also exposes `inspect(run_id)`, `cancel(run_id)`, and read-only
 `watch(run_id)`/`awatch(run_id)` helpers over the shared journal. These typed
 request/result classes are part of the current public consumer interface. Do not import
 service database/scheduler internals from consumers.
+
+
+### Native web evidence returned by an exec run (1.4.0)
+
+`RunResult.web_search_status` is `NOT_ATTESTED`, `SEARCH_OBSERVED`, `SOURCE_DISCOVERED` or `PAGE_OPEN_OBSERVED`. `RunResult.web_evidence` is a bounded list (maximum 16) of dictionaries with `evidence_id`, `bridge_run_id`, `status`, `url`, and `provenance`. Receipts are collected **only** from native `item.completed`/`web_search` events during the *same run*; web URLs generated in assistant text are not promoted to evidence. Search query text, page content, raw output, credentials, IP/loopback targets, query strings and fragments are never included.
+
+`SOURCE_DISCOVERED` only attests a URL emitted in tool search results. `PAGE_OPEN_OBSERVED` attests a completed tool open action, **not successful retrieval or reading**. The Bridge never asserts `PAGE_CONTENT_CONFIRMED`. If the installed Codex CLI omits web events/results, status can remain `NOT_ATTESTED` or `SEARCH_OBSERVED` with no URLs. No result means no provenance proof; do not fabricate sources. Candidate adoption needs independent verification and human approval.
