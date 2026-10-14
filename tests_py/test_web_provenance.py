@@ -118,6 +118,29 @@ class WebProvenanceTests(unittest.TestCase):
             "page_url": "https://docs.python.org/private/token",
         }]}), [])
 
+    def test_receipt_rejects_cross_origin_exact_page(self):
+        # Two individually safe locators must not be combined into fake provenance.
+        self.assertEqual(to_p4_web_receipts({"sources": [{
+            "state": "PAGE_OPEN_OBSERVED",
+            "origin": "https://github.com/",
+            "page_url": "https://docs.python.org/3/library/",
+        }]}), [])
+        self.assertEqual(to_p4_web_receipts({"sources": [{
+            "state": "SOURCE_DISCOVERED",
+            "origin": "https://docs.python.org/",
+            "page_url": "https://developer.mozilla.org/en-US/docs/Web/HTTP",
+        }]}), [])
+        self.assertEqual(to_p4_web_receipts({"sources": [{
+            "state": "SOURCE_DISCOVERED",
+            "origin": "https://docs.python.org/",
+            "page_url": "https://docs.python.org/3/library/",
+        }]}), [{
+            "kind": "WEB_SEARCH_EVENT_OBSERVED",
+            "operation": "search",
+            "source_urls": ["https://docs.python.org/3/library/"],
+            "page_content_confirmed": False,
+        }])
+
     def test_run_result_remains_compatible_with_old_payload(self):
         old = RunResult(ok=True, bridge_run_id="br_1", exit_code=0, content="ok", stderr="")
         self.assertIsNone(old.web_observations)
