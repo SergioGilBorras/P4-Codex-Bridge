@@ -5,7 +5,7 @@ import json
 import time
 from pathlib import Path
 
-from p4_codex_bridge import CodexRuntimeManager, TurnState
+from p4_codex_bridge.runtime_manager import CodexRuntimeManager, TurnState
 
 
 def main() -> int:
@@ -37,4 +37,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(
+        description=(__doc__ or "Manual Codex smoke test").strip().splitlines()[0]
+    )
+    parser.parse_args()  # --help must not start a model or mutate state
     raise SystemExit(main())
