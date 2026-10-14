@@ -25,4 +25,10 @@ def main() -> None:
         manager.stop(mode="WAIT")
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(
+        description=(__doc__ or "Manual Codex smoke test").strip().splitlines()[0]
+    )
+    parser.parse_args()  # --help is side-effect free; unknown flags fail closed
+    raise SystemExit(main())

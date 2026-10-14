@@ -14,6 +14,20 @@ SERVICE_SMOKE = ROOT / "tests_real" / "smoke_service.py"
 
 
 class RealSmokeScriptTests(unittest.TestCase):
+    def test_all_manual_smoke_scripts_document_help_without_inference(self) -> None:
+        paths = sorted((ROOT / "tests_real").glob("smoke_*.py"))
+        self.assertGreaterEqual(len(paths), 10)
+        for script in paths:
+            with self.subTest(script=script.name):
+                result = subprocess.run(
+                    [sys.executable, str(script), "--help"],
+                    cwd=ROOT, capture_output=True, text=True,
+                    timeout=15, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("usage:", result.stdout.lower())
+                self.assertIn("--help", result.stdout)
+
     def test_live_watch_script_bootstraps_project_import_when_run_by_path(self) -> None:
         code = (
             "import pathlib, sys; "

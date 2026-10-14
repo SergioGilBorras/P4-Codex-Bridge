@@ -51,4 +51,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(
+        description=(__doc__ or "Manual Codex smoke test").strip().splitlines()[0]
+    )
+    parser.parse_args()  # --help must not start a model or mutate state
     raise SystemExit(main())

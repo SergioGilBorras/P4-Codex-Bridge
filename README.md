@@ -18,7 +18,7 @@ P4-Codex-Bridge is a Python interface and operator CLI for the locally installed
 
 ## Requirements
 
-- Python 3.11+ (support for Python 3.10 ended with 1.2.0).
+- Python 3.11+; Python 3.10 and older are unsupported.
 - `portable-tempdirs` is pinned to an immutable upstream Git commit for managed temporary directories; see [installation](docs/INSTALLATION.md) for Git/offline and publication constraints.
 - An installed Codex CLI and authentication through its supported login mechanism.
 - A real, existing `cwd` for Codex calls; creating a new directory or a Git repository is not a bridge requirement.
