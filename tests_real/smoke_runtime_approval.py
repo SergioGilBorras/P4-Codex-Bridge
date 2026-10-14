@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from p4_codex_bridge import CodexBridge, CodexRuntimeManager, TurnState
+from p4_codex_bridge import CodexBridge
+from p4_codex_bridge.runtime_manager import CodexRuntimeManager, TurnState
 from p4_codex_bridge.runtime import probe
 
 
@@ -86,4 +87,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(
+        description=(__doc__ or "Manual Codex smoke test").strip().splitlines()[0]
+    )
+    parser.parse_args()  # --help must not start a model or mutate state
     raise SystemExit(main())
