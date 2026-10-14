@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 _MAX_EVENTS = 24
 _MAX_SOURCES = 8
 _MAX_LINE = 65536
+_MAX_JSONL_BYTES = 1_048_576
 _MAX_URL = 512
 _HOST = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
 
@@ -56,7 +57,7 @@ def safe_public_url(value: object) -> str | None:
 def collect_web_receipts(output: bytes) -> list[dict[str, object]]:
     """Only item.completed(web_search) events, never agent_message self-reports."""
     receipts: list[dict[str, object]] = []
-    for line in output.splitlines():
+    for line in output[:_MAX_JSONL_BYTES].splitlines()[:256]:
         if len(receipts) >= _MAX_EVENTS:
             break
         if len(line) > _MAX_LINE:
