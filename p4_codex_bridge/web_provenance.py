@@ -165,7 +165,8 @@ def to_p4_web_receipts(observations: object) -> list[dict[str, object]]:
         if safe_public_https_url(origin) != origin or state not in ("PAGE_OPEN_OBSERVED", "SOURCE_DISCOVERED"):
             continue
         exact_page = source.get("page_url")
-        if exact_page is not None and safe_public_page_url(exact_page) != exact_page:
+        if exact_page is not None and (safe_public_page_url(exact_page) != exact_page
+                                       or safe_public_https_url(exact_page) != origin):
             continue
         receipts.append({
             "kind": "WEB_SEARCH_EVENT_OBSERVED",
