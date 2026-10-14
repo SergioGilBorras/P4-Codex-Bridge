@@ -1125,13 +1125,25 @@ class CodexRuntimeManager:
         # A one-second reader join is insufficient on loaded Windows runners.
         join_budget = max(5.0, float(timeout))
         deadline = time.monotonic() + join_budget
+        # The reader can enqueue scheduler work while draining final
+        # events. Snapshot background workers only after the reader/control
+        # threads exit; otherwise late workers retain SQLite handles.
         workers = [self._reader, self._control_thread]
-        with self._background_threads_lock:
-            workers.extend(self._background_threads)
         for worker in workers:
             if worker is not None and worker is not threading.current_thread():
                 worker.join(timeout=max(0.0, deadline - time.monotonic()))
-        live_workers = [worker.name for worker in workers
+        while True:
+            with self._background_threads_lock:
+                background = tuple(self._background_threads)
+            active = [worker for worker in background
+                      if worker is not threading.current_thread() and worker.is_alive()]
+            if not active or time.monotonic() >= deadline:
+                break
+            for worker in active:
+                worker.join(timeout=max(0.0, deadline - time.monotonic()))
+        with self._background_threads_lock:
+            live_background = tuple(self._background_threads)
+        live_workers = [worker.name for worker in [*workers, *live_background]
                         if worker is not None and worker is not threading.current_thread() and worker.is_alive()]
         if live_workers:
             # Keeping the singleton lock prevents a replacement owner from
