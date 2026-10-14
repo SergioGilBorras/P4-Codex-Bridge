@@ -60,13 +60,7 @@ covered offline. Live Codex service operation is environment-specific; offline f
 The command channel must never accept arbitrary Python/CLI commands. Do not add
 HTTP as a shortcut.
 
-Keep the client and resident service on the same Bridge release. In particular,
-a 1.2.0 client sends the typed `ephemeral` field, which a 1.1.0 service rejects
-as unknown. For an upgrade, stop the service, update the package in its Python
-environment, restart it with the existing state directory, then verify the
-reported service version before submitting. A 1.2.0 service defaults legacy
-exec payloads that omit this field to `ephemeral=true`; this narrow behavior is
-not a general mixed-version compatibility promise.
+Keep the Python client and the resident service on the **same installed Bridge 1.3.0 release**. Unknown typed fields are rejected rather than silently reinterpreted. Before updating a running service, stop it, update the package in its Python environment, restart with the existing state directory, and verify the service-reported version before submitting work.
 
 `ps`, `inspect`, `watch`, `resources`, health and metrics remain direct
 read-only SQLite queries. Cancel/approval decisions and service stop are
