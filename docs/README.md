@@ -26,6 +26,6 @@ This index describes the **current 1.3.0 development source tree (not published)
 ## Development and testing
 
 - [Development workflow](DEVELOPMENT_WORKFLOW.md), [test catalog](TEST_CATALOG.md), [model-use policy](TEST_TOKEN_BUDGET.md).
-- [Tools](TOOLS_CATALOG.md) and [skills catalog](SKILLS_CATALOG.md) explain *runtime discovery*; they do not claim that a fixed set of tools or skills is installed.
+- [Capability matrix](CAPABILITY_MATRIX.md), [MCP](MCP.md) and [skills](SKILLS.md) document run-aware discovery, without claiming a fixed host inventory.
 
 The linked pages describe supported behavior, known limits and candidate improvements; they do not guarantee that a given CLI installation or account enables every feature.
