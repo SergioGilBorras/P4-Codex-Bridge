@@ -7,7 +7,7 @@ Capabilities have three distinct layers: **bridge implementation**, **installed 
 | One-shot `codex exec` | Implemented | Installed executable, login, exec command and a successful matching run |
 | Managed queued exec | Implemented | As above; pending dispatch depends on local scheduler resources |
 | `skip_git_repo_check` for `run/start` | Implemented, opt-in, default false | `--skip-git-repo-check` in installed `codex exec --help`; bridge rejects unsupported requested flag |
-| `ephemeral=False` persistent exec request | Implemented, offline-tested | Bridge omits `--ephemeral`, requires a usable `thread.started.thread_id`, exposes it in `RunResult.session_id`; no live persistence/resume inference was run for this change |
+| `ephemeral=False` persistent exec request | Implemented, offline-tested | Bridge omits `--ephemeral`, requires a usable `thread.started.thread_id`, exposes it in `RunResult.session_id`; persistence and resume require independently observed real-run evidence |
 | Default `ephemeral=True` | Implemented, offline-tested | Installed `codex exec --help` must advertise `--ephemeral`; `get_capabilities()` exposes `exec.ephemeral` and `ephemeral_capability`; otherwise the bridge raises `CapabilityUnavailableError` before direct launch or managed enqueue |
 | `ephemeral` through service `submit exec` | Implemented, offline-tested | Strict bool in `ExecRunSubmission`, default true, payload validated again by service before managed `start()`; app-server thread lifecycle is separate |
 | Structured output | Implemented for exec | `--output-schema` in CLI help; emitted JSON syntax validated; schema completeness not guaranteed by bridge parser |
