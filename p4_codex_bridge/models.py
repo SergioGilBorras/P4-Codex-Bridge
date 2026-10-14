@@ -105,6 +105,8 @@ class RunResult:
     duration_ms: int = 0
     session_id: str | None = None
     raw_output: str | None = None
+    web_search_status: str = "NOT_ATTESTED"
+    web_evidence: list[dict[str, str]] | None = None
 
     @property
     def text_output(self) -> str:
