@@ -628,7 +628,7 @@ class BridgeTests(unittest.TestCase):
             "fake-session-123", "branch", cwd=self.cwd,
             confirm_inherited_permissions=True,
         )
-        self.assertTrue(result.ok)
+        self.assertTrue(result.ok, result.error)
         self.assertEqual(result.session_id, "fake-session-123")
         self.assertEqual(self.bridge.list_runs()[0].backend, "codex-exec-fork")
 
@@ -667,7 +667,10 @@ class BridgeTests(unittest.TestCase):
 
     def test_process_registry_list_status_and_result_cleanup(self):
         run = self.bridge.start("inspect", cwd=self.cwd)
-        self.assertIn(run.status, {RunStatus.STARTING, RunStatus.RUNNING})
+        # A fast fake worker may already be terminal before start() returns.
+        # The final assertions below still require success and consume-once.
+        self.assertIn(run.status, {RunStatus.STARTING, RunStatus.RUNNING,
+                                   RunStatus.COMPLETED})
         seen = {item.bridge_run_id for item in self.bridge.list_runs()}
         self.assertIn(run.bridge_run_id, seen)
         deadline = time.monotonic() + 5
