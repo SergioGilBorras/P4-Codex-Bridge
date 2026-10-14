@@ -10,7 +10,7 @@ Syntax compilation, packaging checks, local CLI help and documented fake-service
 
 ## Opt-in manual checks
 
-Scripts under `tests_real/` may contact the authenticated Codex service. Run them only with explicit, separate authorization, a known workspace/security policy and a recorded call budget.
+`python -m tests_py.smoke_codex` is also a **manual live test**, despite residing under `tests_py/`. It never participates in `unittest` discovery; it requires `--run-real-turn` before probing authentication or contacting a model. `--help` never runs Codex.\n\nScripts under `tests_real/` may contact the authenticated Codex service. Run them only with explicit, separate authorization, a known workspace/security policy and a recorded call budget.
 
 Before manual execution:
 
