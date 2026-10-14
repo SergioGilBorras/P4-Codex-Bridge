@@ -10,7 +10,7 @@ Syntax compilation, packaging checks, local CLI help and documented fake-service
 
 ## Opt-in manual checks
 
-`python -m tests_py.smoke_codex` is also a **manual live test**, despite residing under `tests_py/`. It never participates in `unittest` discovery; it requires `--run-real-turn` before probing authentication or contacting a model. `--help` never runs Codex.\n\nScripts under `tests_real/` may contact the authenticated Codex service. Run them only with explicit, separate authorization, a known workspace/security policy and a recorded call budget.
+`python -m tests_py.smoke_codex` is also a **manual live test**, despite residing under `tests_py/`. It never participates in `unittest` discovery; it requires `--run-real-turn` before probing authentication or contacting a model. `--help` never runs Codex.\n\nScripts under `tests_real/` may contact the authenticated Codex service. **All smoke scripts that create real model turns require an explicit `--run-real-turn` flag** (with additional security flags where documented). `smoke_mcp_visibility.py` is a diagnostic that does not run inference but can start a diagnostic app-server. Run live checks only with separate authorization, an approved workspace/security policy and a recorded call budget.
 
 Before manual execution:
 
