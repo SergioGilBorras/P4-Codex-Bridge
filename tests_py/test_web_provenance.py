@@ -161,6 +161,9 @@ class WebProvenanceTests(unittest.TestCase):
             "url_sha256": "0" * 64,
         }]}
         self.assertEqual(to_p4_web_receipts(tampered), [])
+        origin_only = {"sources": [{"state": "SOURCE_DISCOVERED",
+                                   "origin": "https://github.com/", "url_sha256": digest}]}
+        self.assertEqual(to_p4_web_receipts(origin_only), [])
 
     def test_untrusted_paths_never_gain_fingerprints(self):
         observed = extract_web_observations(event({
