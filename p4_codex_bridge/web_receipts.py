@@ -39,6 +39,15 @@ def safe_public_url(value: object) -> str | None:
             pass
         if "." not in host or len(host.rsplit(".", 1)[-1]) < 2:
             return None
+        # Never export URL paths carrying credential-like values, personal
+        # identifiers, percent-encoded payloads or local-user paths. A page
+        # without a safe public locator is NOT_ATTESTED as a source.
+        path = u.path.lower()
+        if ("%" in path or "@" in path or "=" in path or ":" in path
+                or "\\" in path or "//" in path or
+                re.search(r"/(?:users?|home|root|private|secrets?|credentials?|tokens?|passwords?)(?:/|$)", path)
+                or re.search(r"(?:api[_-]?key|access[_-]?token|client[_-]?secret|password|bearer)", path)):
+            return None
     except (ValueError, UnicodeError):
         return None
     return value
