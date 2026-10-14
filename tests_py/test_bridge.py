@@ -86,6 +86,10 @@ elif "exec" in args:
             print("invalid JSON Schema", file=sys.stderr)
             sys.exit(4)
         content = json.dumps({"ok":True})
+    elif model == "web-evidence":
+        print(json.dumps({"type":"item.completed","item":{"type":"web_search","action":{"type":"search","query":"never export my private prompt"},"results":[{"url":"https://docs.python.org/library/"},{"url":"https://127.0.0.1/private"}]}}), flush=True)
+        print(json.dumps({"type":"item.completed","item":{"type":"web_search","status":"completed","action":{"type":"open_page","url":"https://docs.python.org/library/"}}}),flush=True)
+        content = "Found https://unverified.example.com/hallucinated (self-report only)"
     elif model == "bad-json":
         content = "not-json"
     elif model == "last-malformed":
@@ -144,6 +148,22 @@ class BridgeTests(unittest.TestCase):
         # Ordinary fake executions test contracts, not Windows process startup
         # latency. Timeout behavior has dedicated cases with explicit short values.
         return self.bridge.run("hello", cwd=self.cwd, model=model, timeout_seconds=kwargs.pop("timeout_seconds", 30), **kwargs)
+
+    def test_native_web_receipts_flow_through_run_result_without_raw_output(self):
+        result = self.run_model("web-evidence")
+        self.assertTrue(result.ok, result.error)
+        self.assertEqual(result.web_search_status, "PAGE_OPEN_OBSERVED")
+        self.assertEqual(len(result.web_evidence), 2)
+        self.assertEqual(
+            [record["status"] for record in result.web_evidence],
+            ["SOURCE_DISCOVERED", "PAGE_OPEN_OBSERVED"],
+        )
+        self.assertEqual(result.web_evidence[0]["url"], "https://docs.python.org/library/")
+        self.assertEqual(result.web_evidence[0]["bridge_run_id"], result.bridge_run_id)
+        self.assertIsNone(result.raw_output)
+        self.assertNotIn("127.0.0.1", str(result.web_evidence))
+        self.assertNotIn("unverified", str(result.web_evidence))
+        self.assertNotIn("private prompt", str(result.web_evidence))
 
     def test_run_valid_and_prompt_is_passed_on_stdin(self):
         result = self.bridge.run("hello; $env:SECRET", cwd=self.cwd)
