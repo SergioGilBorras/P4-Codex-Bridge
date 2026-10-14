@@ -179,7 +179,7 @@ def to_p4_web_receipts(observations: object) -> list[dict[str, object]]:
         if digest is not None and (not isinstance(digest, str) or len(digest) != 64
                                    or any(ch not in "0123456789abcdef" for ch in digest)):
             continue
-        if exact_page is not None and digest is not None and digest != hashlib.sha256(exact_page.encode("utf-8")).hexdigest():
+        if digest is not None and (exact_page is None or digest != hashlib.sha256(exact_page.encode("utf-8")).hexdigest()):
             continue
         receipt = {
             "kind": "WEB_SEARCH_EVENT_OBSERVED",
