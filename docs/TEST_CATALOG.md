@@ -30,4 +30,4 @@ Automated results depend on the current commit and environment. Report actual pa
 
 The scripts in `tests_real/` are **separate, opt-in** checks and some consume model usage. Every `smoke_*.py` script provides `--help` without starting inference; invoke real smoke tests only after explicit operator authorization. Examples include streaming, structured output, approval rejection, persistent threads, concurrency, service operation and AGENTS behavior. Do not include these scripts in a default CI/test loop or call them merely to inspect documentation.
 
-For model-use safeguards see [test token budget](TEST_TOKEN_BUDGET.md); for unsupported behavior see [known limitations](KNOWN_LIMITATIONS.md).
+The separate `python -m tests_py.smoke_codex` API probe also requires `--run-real-turn`; without it the script fails before authentication or model invocation. Use `python -m tests_py.smoke_codex --help` to inspect its contract safely.\n\nFor model-use safeguards see [test token budget](TEST_TOKEN_BUDGET.md); for unsupported behavior see [known limitations](KNOWN_LIMITATIONS.md).
