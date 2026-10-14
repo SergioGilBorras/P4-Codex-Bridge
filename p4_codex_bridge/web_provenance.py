@@ -106,3 +106,30 @@ def extract_web_observations(raw: bytes) -> dict[str, object]:
         "truncated": truncated,
         "page_content_confirmed": False,
     }
+
+
+def to_p4_web_receipts(observations: object) -> list[dict[str, object]]:
+    """Project observed public-domain leads into P4's existing receipt schema.
+
+    This is not a statement that a URL's page or information was verified.
+    """
+    if not isinstance(observations, dict):
+        return []
+    source_items = observations.get("sources")
+    if not isinstance(source_items, list):
+        return []
+    receipts: list[dict[str, object]] = []
+    for source in source_items[:MAX_SOURCES]:
+        if not isinstance(source, dict):
+            continue
+        origin = source.get("origin")
+        state = source.get("state")
+        if safe_public_https_url(origin) != origin or state not in ("PAGE_OPEN_OBSERVED", "SOURCE_DISCOVERED"):
+            continue
+        receipts.append({
+            "kind": "WEB_SEARCH_EVENT_OBSERVED",
+            "operation": "open_page" if state == "PAGE_OPEN_OBSERVED" else "search",
+            "source_urls": [origin],
+            "page_content_confirmed": False,
+        })
+    return receipts
