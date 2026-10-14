@@ -28,6 +28,27 @@ class RealSmokeScriptTests(unittest.TestCase):
                 self.assertIn("usage:", result.stdout.lower())
                 self.assertIn("--help", result.stdout)
 
+    def test_live_manual_smokes_are_never_authorized_by_default(self) -> None:
+        live_scripts = (
+            "smoke_approval_reject.py",
+            "smoke_concurrency.py",
+            "smoke_live_watch.py",
+            "smoke_persistent_thread.py",
+            "smoke_runtime_approval.py",
+            "smoke_runtime_manager.py",
+            "smoke_streaming.py",
+            "smoke_structured_output.py",
+        )
+        for name in live_scripts:
+            with self.subTest(script=name):
+                result = subprocess.run(
+                    [sys.executable, str(ROOT / "tests_real" / name)],
+                    cwd=ROOT, capture_output=True, text=True,
+                    timeout=15, check=False,
+                )
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("live inference disabled by default", result.stderr)
+
     def test_python_api_smoke_is_opt_in_and_exposes_help(self) -> None:
         command = [sys.executable, "-m", "tests_py.smoke_codex"]
         help_result = subprocess.run(
