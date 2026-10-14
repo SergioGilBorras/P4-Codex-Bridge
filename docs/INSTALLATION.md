@@ -18,7 +18,7 @@ Use the intended Python environment, preferably a virtual environment:
     python -m p4_codex_bridge --version
     python -m p4_codex_bridge --help
 
-Source package version: **1.4.0 (development, not published)**. Installing from this checkout is not equivalent to publishing a release to a package index.
+Source package version: **1.4.1 (development, not published)**. Installing from this checkout is not equivalent to publishing a release to a package index.
 
 The fixed Git dependency avoids moving-branch resolution. The dependency is installed from an immutable source commit; this does not make Bridge distributions self-contained offline. Because project metadata declares a direct Git URL, do not upload these distributions to PyPI unless the dependency is replaced by a published, verified release and the resulting metadata is checked.
 
