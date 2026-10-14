@@ -449,3 +449,11 @@ The client also exposes `inspect(run_id)`, `cancel(run_id)`, and read-only
 `watch(run_id)`/`awatch(run_id)` helpers over the shared journal. These typed
 request/result classes are part of the current public consumer interface. Do not import
 service database/scheduler internals from consumers.
+
+## Observed web-search receipts (opt-in via native web mode)
+
+When an isolated or explicitly configured `exec` request sets `config_overrides={"web_search": "live"}` (or another supported enabled search mode), `RunResult.web_receipts` contains a **bounded list of observed tool events**. Each record has `kind="WEB_SEARCH_EVENT_OBSERVED"`, `operation` (`search`, `open_page`, `find_in_page` or `unknown`), `source_urls` and `page_content_confirmed=False`. Disabled search produces no receipts. The field is additive and may be `None` when reading older results.
+
+A record certifies only that the matching subprocess emitted a JSONL `item.completed` web-search event. Results and open-page URLs are collected only if present and pass restrictive public HTTPS checks; private addresses, localhost, credentials, explicit ports, queries, fragments, malformed strings, oversized entries and duplicate URLs are excluded. Search text, snippets, page bodies and model reasoning are never included. Neither a search event nor `open_page` by itself attests that the page was successfully read, that a claim is true, that a license is compatible, or that a dependency is safe. Missing events or URLs mean **NOT_ATTESTED**, not that research was performed successfully. Do not use `include_raw_output=True` to claim source provenance; raw output may contain sensitive information.
+
+Consumers must scope each receipt to `bridge_run_id`, corroborate proposed dependencies independently and require human review before adoption. Native web search must not imply shell network, MCP execution permission or filesystem writes. The installed Codex CLI determines which native JSONL event fields actually exist. An offline fake proves parsing and safety, **not** real-web availability.
