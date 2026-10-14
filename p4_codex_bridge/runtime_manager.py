@@ -32,7 +32,7 @@ from .security import RunSecurityPolicy, validate_run_security
 logger = logging.getLogger("p4_codex_bridge.runtime")
 
 
-from .errors import CapabilityUnavailableError
+from .errors import BridgeTimeoutError, CapabilityUnavailableError
 
 
 class RuntimeState(StrEnum):
@@ -1120,13 +1120,36 @@ class CodexRuntimeManager:
                 except (OSError, subprocess.TimeoutExpired):
                     try: proc.kill(); proc.wait(timeout=2)
                     except OSError: pass
-        if self._reader and threading.current_thread() is not self._reader: self._reader.join(timeout=1)
-        if self._control_thread and threading.current_thread() is not self._control_thread:
-            self._control_thread.join(timeout=max(1, timeout))
+        # Do not report STOPPED or close the SQLite/lock lifecycle while a
+        # worker still owns the app-server stream or may persist runtime events.
+        # A one-second reader join is insufficient on loaded Windows runners.
+        join_budget = max(5.0, float(timeout))
+        deadline = time.monotonic() + join_budget
+        # The reader can enqueue scheduler work while draining final
+        # events. Snapshot background workers only after the reader/control
+        # threads exit; otherwise late workers retain SQLite handles.
+        workers = [self._reader, self._control_thread]
+        for worker in workers:
+            if worker is not None and worker is not threading.current_thread():
+                worker.join(timeout=max(0.0, deadline - time.monotonic()))
+        while True:
+            with self._background_threads_lock:
+                background = tuple(self._background_threads)
+            active = [worker for worker in background
+                      if worker is not threading.current_thread() and worker.is_alive()]
+            if not active or time.monotonic() >= deadline:
+                break
+            for worker in active:
+                worker.join(timeout=max(0.0, deadline - time.monotonic()))
         with self._background_threads_lock:
-            background_threads = tuple(self._background_threads)
-        for thread in background_threads:
-            if thread is not threading.current_thread(): thread.join(timeout=max(1, timeout))
+            live_background = tuple(self._background_threads)
+        live_workers = [worker.name for worker in [*workers, *live_background]
+                        if worker is not None and worker is not threading.current_thread() and worker.is_alive()]
+        if live_workers:
+            # Keeping the singleton lock prevents a replacement owner from
+            # racing a still-live worker over the same SQLite state.
+            self._fail_pending()
+            raise BridgeTimeoutError("runtime shutdown incomplete; background workers remain active")
         self._fail_pending(); self._singleton.release()
         if proc:
             for stream in (proc.stdin, proc.stdout):

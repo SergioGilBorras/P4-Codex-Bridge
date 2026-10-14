@@ -5,7 +5,7 @@ import sys
 from tests_py._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from p4_codex_bridge.runtime_manager import CodexRuntimeManager, RuntimeState, TurnState
 from p4_codex_bridge.registry import RunRegistry
@@ -475,6 +475,20 @@ class RuntimeManagerTests(unittest.TestCase):
             self.assertFalse(manager._control_thread.is_alive())
             shutil.rmtree(state)
             self.assertFalse(state.exists())
+
+    def test_stop_fails_closed_when_reader_remains_active(self):
+        from p4_codex_bridge.errors import BridgeTimeoutError
+        reader = Mock()
+        reader.name = "test-blocked-reader"
+        reader.is_alive.return_value = True
+        self.manager._reader = reader
+        with patch.object(self.manager._singleton, "release") as release:
+            with self.assertRaisesRegex(BridgeTimeoutError, "shutdown incomplete"):
+                self.manager.stop(mode="WAIT", timeout=0.01)
+            release.assert_not_called()
+            self.assertEqual(self.manager.state, RuntimeState.STOPPING)
+            self.assertGreaterEqual(reader.join.call_args.kwargs["timeout"], 4.0)
+        self.manager._reader = None
 
     def test_approval_runtime_sqlite_teardown_joins_workers_before_immediate_delete(self):
         import shutil
