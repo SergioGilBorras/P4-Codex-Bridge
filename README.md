@@ -121,7 +121,7 @@ Consult [CLI](docs/CLI.md) before submitting jobs. The foreground service and cr
 
 ## Verification
 
-    python -m compileall -q p4_codex_bridge tests/unit
+    python -m compileall -q src/p4_codex_bridge tests/unit
     python -m unittest discover -s tests/unit -v
 
 Automated tests use fake Codex/app-server processes and do not make real model calls. Scripts in `tests/manual/` are manual, opt-in and may incur usage.
@@ -132,7 +132,8 @@ Start with the [documentation index](docs/README.md) for current API, architectu
 
 ## Project layout
 
-- [Python package](p4_codex_bridge/README.md) — public API and implementation modules.
+- [Source layout](src/README.md) — Python code under `src/`.
+- [Python package](src/p4_codex_bridge/README.md) — public API and implementation modules.
 - [Windows launcher](bin/README.md) — the installed `p4-codex.cmd` entry point.
 - [Example programs](examples/README.md) — non-production demonstration scripts.
 - [Tests](tests/README.md) — offline unit tests, fixtures, and separately authorized live checks.

@@ -11,9 +11,11 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class ProjectLayoutTests(unittest.TestCase):
     def test_documented_top_level_directories_and_license(self) -> None:
-        for name in ("bin", "examples", "p4_codex_bridge", "docs", "tests"):
+        for name in ("bin", "examples", "src", "docs", "tests"):
             with self.subTest(directory=name):
                 self.assertTrue((ROOT / name / "README.md").is_file())
+        self.assertTrue((ROOT / "src" / "p4_codex_bridge" / "README.md").is_file())
+        self.assertFalse((ROOT / "p4_codex_bridge").exists())
         for name in ("LICENSE", "AUTHORS.md", "CONTRIBUTORS.md"):
             with self.subTest(file=name):
                 self.assertTrue((ROOT / name).is_file())
@@ -26,6 +28,8 @@ class ProjectLayoutTests(unittest.TestCase):
         self.assertEqual(project["authors"], [{"name": "Sergio Gil-Borrás"}])
         self.assertEqual(project["readme"], "README.md")
         self.assertEqual(project["requires-python"], ">=3.11")
+        self.assertEqual(data["tool"]["setuptools"]["package-dir"], {"": "src"})
+        self.assertEqual(data["tool"]["setuptools"]["packages"]["find"]["where"], ["src"])
         self.assertTrue(any(
             spec.startswith("portable-tempdirs @ git+https://github.com/SergioGilBorras/portable-tempdirs.git@")
             and len(spec.rsplit("@", 1)[1]) == 40

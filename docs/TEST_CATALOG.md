@@ -4,7 +4,7 @@ The **ordinary automated suite is offline**: fake Codex CLI/app-server processes
 
 ## Default commands
 
-    python -m compileall -q p4_codex_bridge tests/unit
+    python -m compileall -q src/p4_codex_bridge tests/unit
     python -m unittest discover -s tests/unit -v
 
 Tests run with the intended Python interpreter. Windows launcher diagnostics requiring invocation of a potentially hanging packaging-generated `.exe` are opt-in and may be skipped by normal discovery.

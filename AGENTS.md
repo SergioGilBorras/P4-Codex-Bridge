@@ -33,7 +33,7 @@ This repository is shared infrastructure for invoking Codex from P4. Potential a
 
 ## Tests and validation
 
-- Python: `python -m compileall -q p4_codex_bridge tests/unit`, then `python -m unittest discover -s tests/unit -v`.
+- Python: `python -m compileall -q src/p4_codex_bridge tests/unit`, then `python -m unittest discover -s tests/unit -v`.
 - Real Codex smokes remain manual and separate: `python tests/manual/smoke_streaming.py` is one minimal read-only turn; `python tests/manual/smoke_approval_reject.py` is never run automatically.
 - Do not claim checks passed unless they ran. Do not use an unrelated global Python project environment; always select the intended project Python environment explicitly.
 

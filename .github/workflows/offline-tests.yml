@@ -25,6 +25,8 @@ jobs:
       - name: Install build backend for offline wheel contract test
         run: python -m pip install "setuptools>=77" wheel
       - name: Compile
-        run: python -m compileall -q p4_codex_bridge tests/unit
+        run: python -m compileall -q src/p4_codex_bridge tests/unit
+      - name: Verify installed src package
+        run: python -c "import importlib.util, pathlib, p4_codex_bridge; p = pathlib.Path(p4_codex_bridge.__file__).resolve(); assert p.name == '__init__.py' and p.parent.name == 'p4_codex_bridge' and p.parent.parent.name == 'site-packages', p"
       - name: Offline test suite
         run: python -m unittest discover -s tests/unit -v

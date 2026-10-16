@@ -50,7 +50,7 @@ class RealSmokeScriptTests(unittest.TestCase):
         code = (
             "import pathlib, sys; "
             "root = pathlib.Path(sys.argv[1]).resolve(); "
-            "sys.path = [p for p in sys.path if pathlib.Path(p or '.').resolve() != root]; "
+            "sys.path = [p for p in sys.path if pathlib.Path(p or '.').resolve() not in (root, root / 'src')]; "
             "scope = {'__name__': 'smoke_live_watch_import_check', '__file__': sys.argv[2]}; "
             "exec(compile(pathlib.Path(sys.argv[2]).read_text(encoding='utf-8'), sys.argv[2], 'exec'), scope); "
             "assert 'CodexBridge' in scope"

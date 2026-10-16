@@ -223,9 +223,9 @@ class ResidentServiceTests(unittest.TestCase):
             command = [sys.executable, "-m", "p4_codex_bridge", "service", "run", "--fake",
                        "--config", str(config), "--state-dir", str(state)]
             env = dict(os.environ)
-            package_root = str(Path(__file__).resolve().parents[2])
+            package_root = str(Path(__file__).resolve().parents[2] / "src")
             env["PYTHONPATH"] = package_root + os.pathsep + env.get("PYTHONPATH", "")
-            first = subprocess.Popen(command, cwd=package_root, env=env, stdin=subprocess.DEVNULL,
+            first = subprocess.Popen(command, cwd=str(Path(__file__).resolve().parents[2]), env=env, stdin=subprocess.DEVNULL,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
             try:
                 deadline = time.monotonic() + 12
@@ -242,7 +242,7 @@ class ResidentServiceTests(unittest.TestCase):
                 self.assertEqual(len(snapshot["config_fingerprint"]), 64)
                 self.assertIn("process_identity", snapshot)
                 self.assertIn("process_identity_verified", snapshot)
-                second = subprocess.run(command, cwd=package_root, env=env, capture_output=True, text=True,
+                second = subprocess.run(command, cwd=str(Path(__file__).resolve().parents[2]), env=env, capture_output=True, text=True,
                                         timeout=8, shell=False)
                 self.assertNotEqual(second.returncode, 0)
                 self.assertEqual(service_status(state)["instance_id"], snapshot["instance_id"])

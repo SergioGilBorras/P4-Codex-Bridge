@@ -21,7 +21,11 @@ Repository = "https://github.com/SergioGilBorras/P4-Codex-Bridge"
 [project.scripts]
 p4-codex = "p4_codex_bridge.cli:main"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["p4_codex_bridge*"]
 
 [tool.setuptools.data-files]

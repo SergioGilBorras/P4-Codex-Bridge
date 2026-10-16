@@ -21,7 +21,7 @@
 ## Commands
 
 ```powershell
-python -m compileall -q p4_codex_bridge tests/unit
+python -m compileall -q src/p4_codex_bridge tests/unit
 python -m unittest discover -s tests/unit -v
 python tests/manual/smoke_streaming.py
 ```
