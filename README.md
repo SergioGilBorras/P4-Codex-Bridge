@@ -140,4 +140,4 @@ Start with the [documentation index](docs/README.md) for current API, architectu
 - [Example configuration](p4-codex.example.toml) — a template for the local foreground service; it is not loaded automatically.
 - [Documentation](docs/README.md) — current behavior, operating procedures and roadmap.
 
-P4-Codex-Bridge is distributed under the [MIT License](LICENSE). See [authors](AUTHORS.md) and [contributors](CONTRIBUTORS.md).
+P4-Codex-Bridge is distributed under the [MIT License](LICENSE). See [authors](AUTHORS.md) and the [contributing guide](CONTRIBUTING.md).
