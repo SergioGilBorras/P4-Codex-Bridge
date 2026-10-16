@@ -19,6 +19,7 @@ Capabilities have three distinct layers: **bridge implementation**, **installed 
 | Scheduler | Implemented for managed exec and app-server | Local SQLite health, ownership/locks and resource limits |
 | Local service client | Implemented | Foreground service running with compatible schema, state directory and same-user access |
 | MCP/skills diagnostics | Implemented as separate diagnostic app-server calls | May show configured/advertised resources; does not confirm exec-child callability or effective run use |
+| Native web-search event observations | Implemented with strict limits, opt-in | `RunResult.web_observations` and `web_receipts` may retain bounded public host leads and allowlisted exact documentation URLs with `url_sha256`; no guaranteed page load, content verification or citation proof |
 | Per-run MCP tool allow/deny | Not supported as an enforceable bridge guarantee | Requires an upstream-supported isolation mechanism and matching-run proof |
 | Active turn adoption / full replay | Not supported as an automatic guarantee | Conservative local recovery only; no unsafe replay |
 | Windows SCM wrapper | Not bundled | External supervisor/operator configuration |

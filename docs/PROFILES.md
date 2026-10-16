@@ -1,18 +1,14 @@
 # Execution profiles and permissions
 
-Profiles are platform execution defaults, not P4 business logic.
+Profiles are platform execution defaults, not P4 business logic. The only supported named exec profile is `analysis`; other profile names are rejected.
 
 | Profile | State | Current behavior |
 |---|---|---|
 | `analysis` | **IMPLEMENTED** for `codex exec` | `read-only`, approval `never`, isolated user-config flag, explicit cwd. This does not prove that project instructions/MCP behavior is isolated. |
-| `planning` | **PLANNED** | No profile behavior. |
-| `implementation` | **PLANNED** | No profile behavior. Never infer write access from Codex capability alone. |
-| `validation` | **PLANNED** | No profile behavior. |
-| `documentation` | **PLANNED** | No profile behavior. |
 
 `CodexBridge.start_turn()` app-server turns accept explicit `CodexPermissions`; they do not implicitly apply a named profile. The installed turn schema supports sandbox values `read-only`, `workspace-write`, and `danger-full-access`, and approval policies `never`, `on-request`, and `untrusted`. For app-server `workspace-write`, the bridge sets `writableRoots` to the validated cwd and `networkAccess` to false. This is the verified turn request mapping and does not override unknown native policy layers.
 
-Approval handling is separately configurable: `MANUAL` is default; `AUTO_REJECT` and `NEVER_EXPECT_APPROVAL` explicitly decline. `AUTO_APPROVE_SAFE_ONLY` is PLANNED because the bridge has no deterministic safe-action classifier. Full access requires caller-supplied `on-request` and is never paired with automatic approval by a default profile.
+Approval handling is separately configurable: `MANUAL` is default; `AUTO_REJECT` and `NEVER_EXPECT_APPROVAL` explicitly decline. `AUTO_APPROVE_SAFE_ONLY` is unsupported because the bridge has no deterministic safe-action classifier. Full access requires caller-supplied `on-request` and is never paired with automatic approval by a default profile.
 
 `config_policy` applies to the CLI `exec` API:
 
@@ -33,6 +29,6 @@ The diagnostic config/MCP/skills methods launch a separate app-server child at t
 
 ### MCP policy status
 
-The proposed future posture is analysis: no external side-effect MCPs; planning: read-oriented; implementation: explicit opt-in; validation: minimum required. The installed `exec` interface does not expose a per-run MCP/tool allowlist, and project config may still apply under `isolated`. Therefore this posture is a **policy requirement, not yet fully enforceable**. Do not use this bridge with an untrusted project MCP configuration until a version-supported deny/allow mechanism is implemented and tested. Codex Apps and TUI tools visible in the development host are not assumed to be child-visible.
+The installed `exec` interface does not expose a verified per-run MCP/tool allowlist, and project configuration may still apply under `isolated`. This limitation prevents a bridge guarantee that inherited external tools have no side effects. Do not use this bridge with untrusted project MCP configuration unless the risk is explicitly assessed and acknowledged under the security policy. Codex Apps and TUI tools visible in the development host are not assumed to be child-visible. See the [roadmap](ROADMAP.md) for proposed enforceable profiles and tool controls.
 
 See [Python API](PYTHON_API.md), [architecture](ARCHITECTURE.md), and [approval behavior](APPROVALS.md).

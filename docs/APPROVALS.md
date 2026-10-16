@@ -11,7 +11,8 @@ Supported local handling policies:
 - `MANUAL` (default): wait for an explicit caller decision.
 - `AUTO_REJECT`: reject approval requests immediately.
 - `NEVER_EXPECT_APPROVAL`: also reject if the protocol unexpectedly asks.
-- `AUTO_APPROVE_SAFE_ONLY`: PLANNED. No deterministic safe-action classifier exists.
+
+`AUTO_APPROVE_SAFE_ONLY` is not supported: the bridge has no deterministic safe-action classifier. Proposed alternatives belong in the [roadmap](ROADMAP.md).
 
 Approval timeout is separate from turn and JSON-RPC request timeouts. The one-turn API's default policy sends a controlled decline; the manager has `approval_timeout_seconds` (default 300) and also declines on expiry. It never silently approves. Permission-profile approval returns the exact requested permission object only after explicit approval, and `permissions: null` on rejection. After restart, local pending requests become `STALE_LOCAL` because the old JSON-RPC ID cannot safely be answered; recovery does not issue a decision. The bridge does not offer `acceptForSession`, exec-policy amendments, or persistent network-policy amendments through its current API.
 

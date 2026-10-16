@@ -17,6 +17,7 @@ This roadmap lists **possible next work**, not functionality that currently exis
 ## Additional possibilities
 
 - Additional named profiles (planning, implementation, validation, documentation) **only** after defining explicit, enforceable policies. `analysis` is the supported default profile today.
+- Safe-only automatic approvals require a deterministic, audited action classifier; `AUTO_APPROVE_SAFE_ONLY` is not available in the current API.
 - Optional support for `skip_git_repo_check` in additional submission surfaces if their typed contracts and security gates can be extended safely; currently available only in Python `CodexBridge.run()` and `start()`.
 - Consumer integration guides and examples for external applications, without claiming installations or deployments that have not been verified.
 

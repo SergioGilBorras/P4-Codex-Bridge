@@ -58,7 +58,7 @@ Supported TOML keys:
 Per-run risk settings are a typed `RunSecurityPolicy` in Python/service request
 payloads; they are not a service-wide TOML table. Unknown keys are errors.
 
-## Per-run native web search (Bridge 1.4.0)
+## Per-run native web search
 
 This feature is **not** a new TOML or environment variable. For an authorized `CodexBridge.run()` / `start()` call, provide `config_overrides={"web_search": "live"}` with `config_policy="isolated"` (only this override allowed), or use `explicit`. Valid modes: `disabled`, `cached`, `indexed`, `live`. In isolated mode the bridge preserves Codex's `--ignore-user-config` setting; it does not disable all possible child-visible MCP tools. Other overrides are rejected with `isolated` and all overrides are rejected with `project`.
 
