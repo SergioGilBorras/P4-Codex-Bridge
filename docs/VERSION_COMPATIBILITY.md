@@ -27,7 +27,7 @@ codex exec --help
 codex login status
 ```
 
-The effective model entitlement is not established by listing models. For source/environment compatibility, run `python -m unittest discover -s tests_py -v` without inference.
+The effective model entitlement is not established by listing models. For source/environment compatibility, run `python -m unittest discover -s tests/unit -v` without inference.
 
 ## Updating a resident service
 

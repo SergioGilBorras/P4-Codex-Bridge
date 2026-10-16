@@ -21,12 +21,12 @@
 ## Commands
 
 ```powershell
-python -m compileall -q p4_codex_bridge tests_py
-python -m unittest discover -s tests_py -v
-python tests_real/smoke_streaming.py
+python -m compileall -q p4_codex_bridge tests/unit
+python -m unittest discover -s tests/unit -v
+python tests/manual/smoke_streaming.py
 ```
 
-The checkout has no `.venv`; document use of the installed Python rather than silently using another project interpreter. Never run Jira real or E2E real tests. Neither real Codex smoke is included in normal tests; do not run `tests_real/smoke_approval_reject.py` automatically.
+The checkout has no `.venv`; document use of the installed Python rather than silently using another project interpreter. Never run Jira real or E2E real tests. Neither real Codex smoke is included in normal tests; do not run `tests/manual/smoke_approval_reject.py` automatically.
 
 ## Context and tools
 

@@ -54,7 +54,7 @@ These commands inspect configuration/capabilities; they do not run inference by 
 
 ## Development tests
 
-    python -m compileall -q p4_codex_bridge tests_py
-    python -m unittest discover -s tests_py -v
+    python -m compileall -q p4_codex_bridge tests/unit
+    python -m unittest discover -s tests/unit -v
 
-The ordinary suite runs fake CLI and app-server processes; real scripts under `tests_real/` require separate consent.
+The ordinary suite runs fake CLI and app-server processes; real scripts under `tests/manual/` require separate consent.

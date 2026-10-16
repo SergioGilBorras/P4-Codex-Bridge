@@ -20,7 +20,7 @@ operations remain experimental where they depend on evolving app-server RPCs.
 
 The package root has an explicit export allowlist. Runtime manager, service
 implementation, scheduler, registry, SQLite, transport, canonicalization and
-process helpers are not package-root exports. `tests_py/test_public_api.py`
+process helpers are not package-root exports. `tests/unit/test_public_api.py`
 locks this boundary. Some exported value types and methods remain experimental;
 being importable does not make them stable.
 
@@ -29,7 +29,7 @@ uses the explicitly named experimental `AppServerCapabilityStatus`; the two
 are separate types. `AppServerCapabilitySet`, `ApprovalRequest`, event models,
 `CodexTurn`, and `AppServerApprovalPolicy` are exported for advanced protocol
 users but remain EXPERIMENTAL. The current public call contract is summarized in [execution contract](CONTRACT.md) and
-covered by `tests_py/test_public_api.py`.
+covered by `tests/unit/test_public_api.py`.
 
 `CodexVersionInfo`, `CapabilitySet`, `CompatibilityResult`,
 `CompatibilityStatus`, and `assess_compatibility` are stable diagnostic value

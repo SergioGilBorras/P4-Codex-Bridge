@@ -121,10 +121,10 @@ Consult [CLI](docs/CLI.md) before submitting jobs. The foreground service and cr
 
 ## Verification
 
-    python -m compileall -q p4_codex_bridge tests_py
-    python -m unittest discover -s tests_py -v
+    python -m compileall -q p4_codex_bridge tests/unit
+    python -m unittest discover -s tests/unit -v
 
-Automated tests use fake Codex/app-server processes and do not make real model calls. Scripts in `tests_real/` are manual, opt-in and may incur usage.
+Automated tests use fake Codex/app-server processes and do not make real model calls. Scripts in `tests/manual/` are manual, opt-in and may incur usage.
 
 ## Documentation
 
