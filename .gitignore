@@ -11,6 +11,7 @@ dist/
 *.whl
 .coverage
 .pytest_cache/
+.ruff_cache/
 
 # Credentials and local environment
 .env

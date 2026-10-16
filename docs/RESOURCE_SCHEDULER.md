@@ -16,7 +16,7 @@ Limits are typed by `RuntimeLimits` and persisted in the same SQLite state datab
 
 The resident `CodexRuntimeManager.start_turn` submits and dispatches app-server work through this queue. `resources()`, `list_runs()`, `inspect()`, `cancel()` and `set_runtime_limits()` expose runtime scheduling state. CLI `resources` and `limits` inspect the shared state database; queued cancellation is supported there, while cancelling active work requires the owning manager.
 
-For human UX inspection, run `python tests_py/scheduler_demo.py --state-dir <temporary-private-directory>`, then in another PowerShell set `$env:P4_CODEX_BRIDGE_STATE_DIR` to that directory and use `p4-codex ps --json`, `p4-codex inspect demo_write`, `p4-codex watch demo_write`, `p4-codex resources`, or `p4-codex cancel demo_global`. The fixture includes separate agents/tasks, a shared-workspace blocker and a global-slot waiter. It creates scheduler records and fake lifecycle events only; it never launches Codex and uses zero tokens.
+For human UX inspection, run `python examples/scheduler_demo.py --state-dir <temporary-private-directory>`, then in another PowerShell set `$env:P4_CODEX_BRIDGE_STATE_DIR` to that directory and use `p4-codex ps --json`, `p4-codex inspect demo_write`, `p4-codex watch demo_write`, `p4-codex resources`, or `p4-codex cancel demo_global`. The fixture includes separate agents/tasks, a shared-workspace blocker and a global-slot waiter. It creates scheduler records and fake lifecycle events only; it never launches Codex and uses zero tokens.
 
 `resource_priority` is a technical ordering input applied only after the caller submits work. It does not represent Jira or business priority.
 

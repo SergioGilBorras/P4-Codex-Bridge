@@ -89,5 +89,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=(__doc__ or "Manual Codex smoke test").strip().splitlines()[0]
     )
-    parser.parse_args()  # --help is side-effect free; unknown flags fail closed
+    parser.add_argument("--run-real-turn", action="store_true", help="Explicitly authorize this live Codex test; it may consume inference.")
+    args = parser.parse_args()
+    if not args.run_real_turn:
+        parser.error("live inference disabled by default; pass --run-real-turn after approval")
     raise SystemExit(main())
