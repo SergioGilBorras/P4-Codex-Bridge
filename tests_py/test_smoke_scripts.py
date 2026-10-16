@@ -28,6 +28,24 @@ class RealSmokeScriptTests(unittest.TestCase):
                 self.assertIn("usage:", result.stdout.lower())
                 self.assertIn("--help", result.stdout)
 
+    def test_live_smokes_require_explicit_real_turn_acknowledgement(self) -> None:
+        live_scripts = (
+            "smoke_agents_context.py", "smoke_codex.py", "smoke_approval_reject.py", "smoke_concurrency.py",
+            "smoke_live_watch.py", "smoke_persistent_thread.py", "smoke_runtime_approval.py",
+            "smoke_runtime_manager.py", "smoke_streaming.py", "smoke_structured_output.py",
+        )
+        for name in live_scripts:
+            with self.subTest(script=name):
+                command = [sys.executable, str(ROOT / "tests_real" / name)]
+                help_result = subprocess.run(command + ["--help"], cwd=ROOT, capture_output=True,
+                                             text=True, timeout=15, check=False)
+                self.assertEqual(help_result.returncode, 0, help_result.stderr)
+                self.assertIn("--run-real-turn", help_result.stdout)
+                refused = subprocess.run(command, cwd=ROOT, capture_output=True, text=True,
+                                         timeout=15, check=False)
+                self.assertEqual(refused.returncode, 2, refused.stderr)
+                self.assertIn("live inference disabled by default", refused.stderr)
+
     def test_live_watch_script_bootstraps_project_import_when_run_by_path(self) -> None:
         code = (
             "import pathlib, sys; "

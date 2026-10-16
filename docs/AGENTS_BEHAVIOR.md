@@ -11,7 +11,7 @@ Codex may use project instructions from its configured context. The bridge does 
 
 ## Verification
 
-The manual `tests_real/smoke_agents_context.py` fixture can be inspected to understand the expected check. It is not part of the automatic suite and may make a real Codex call. Do not execute it without explicit authorization and an assessment of external MCP risks.
+The manual `tests_real/smoke_agents_context.py` fixture can be inspected to understand the expected check. It is not part of the automatic suite and may make a real Codex call. Every manual smoke that starts a real turn requires `--run-real-turn`; the service smoke also requires `--allow-unfiltered-mcps`. Do not execute one without operator authorization and an assessment of external MCP risks.
 
 A host-session or diagnostic-child observation is not proof that a given exec run loaded instructions. Mark the result `UNKNOWN` unless it is tied to that run.
 

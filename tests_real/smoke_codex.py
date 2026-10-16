@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from tests_py._portable_temp import TemporaryDirectory
+from portable_tempdirs import temporary_directory
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -27,7 +27,7 @@ def main() -> int:
         "error": None,
     }
     try:
-        with TemporaryDirectory(prefix="p4-codex-smoke-", dir=workspace) as state_dir:
+        with temporary_directory("P4CodexSmoke", parent=workspace) as state_dir:
             bridge = CodexBridge(state_dir=state_dir, allowed_roots=(workspace,))
             result_data["version"] = bridge.get_version()
             if not authenticated:
@@ -55,4 +55,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description=(__doc__ or "Manual Codex smoke test").strip().splitlines()[0])
+    parser.add_argument("--run-real-turn", action="store_true", help="Explicitly authorize this live Codex test; it may consume inference.")
+    args = parser.parse_args()
+    if not args.run_real_turn:
+        parser.error("live inference disabled by default; pass --run-real-turn after approval")
     raise SystemExit(main())
