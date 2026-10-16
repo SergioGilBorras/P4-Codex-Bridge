@@ -23,10 +23,14 @@ jobs:
       - name: Install project and pinned runtime dependency
         run: python -m pip install .
       - name: Install build backend for offline wheel contract test
-        run: python -m pip install "setuptools>=77" wheel
+        run: python -m pip install "setuptools>=77" wheel build
       - name: Compile
         run: python -m compileall -q src/p4_codex_bridge tests/unit
       - name: Verify installed src package
         run: python -c "import importlib.util, pathlib, p4_codex_bridge; p = pathlib.Path(p4_codex_bridge.__file__).resolve(); assert p.name == '__init__.py' and p.parent.name == 'p4_codex_bridge' and p.parent.parent.name == 'site-packages', p"
       - name: Offline test suite
         run: python -m unittest discover -s tests/unit -v
+      - name: Build wheel and sdist from src layout
+        run: python -m build --no-isolation --wheel --sdist --outdir dist
+      - name: Check source and wheel distribution paths
+        run: python -c "from pathlib import Path; import zipfile, tarfile; d=Path('dist'); w=list(d.glob('*.whl')); s=list(d.glob('*.tar.gz')); assert len(w)==1 and len(s)==1, (w, s); z=zipfile.ZipFile(w[0]); t=tarfile.open(s[0], 'r:gz'); assert 'p4_codex_bridge/__init__.py' in z.namelist(); assert any(n.endswith('/src/p4_codex_bridge/__init__.py') for n in t.getnames()); assert not any(n.startswith('tests/') for n in z.namelist()); assert any(n.endswith('/LICENSE') for n in t.getnames()); print(w[0], s[0])"
