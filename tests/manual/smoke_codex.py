@@ -7,14 +7,14 @@ import sys
 from portable_tempdirs import temporary_directory
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from p4_codex_bridge import CodexBridge
 from p4_codex_bridge.runtime import probe, redact
 
 
 def main() -> int:
-    workspace = Path(__file__).resolve().parents[1] / "tests" / "smoke_workspace"
+    workspace = Path(__file__).resolve().parents[2] / "tests" / "manual" / "smoke_workspace"
     workspace.mkdir(parents=True, exist_ok=True)
     auth = probe(["login", "status"], timeout=15).strip()
     authenticated = "logged in using chatgpt" in auth.lower()

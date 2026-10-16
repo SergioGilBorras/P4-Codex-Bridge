@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -15,7 +15,7 @@ from p4_codex_bridge.runtime import probe
 
 
 def main() -> int:
-    workspace = ROOT / "tests_real" / "smoke_workspace"
+    workspace = ROOT / "tests" / "manual" / "smoke_workspace"
     workspace.mkdir(parents=True, exist_ok=True)
     auth = "Logged in using ChatGPT" in probe(["login", "status"], timeout=15)
     if not auth:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from portable_tempdirs import temporary_directory
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -25,7 +25,7 @@ def _usage(turn):
 
 
 def main() -> int:
-    workspace = (ROOT / "tests_real" / "approval_workspace").resolve(strict=True)
+    workspace = (ROOT / "tests" / "manual" / "approval_workspace").resolve(strict=True)
     target = (workspace / "p4-runtime-approval-probe.txt").resolve()
     if target.parent != workspace or target.exists():
         print(json.dumps({"error": "Refusing to run: target must be absent inside approval_workspace"}))

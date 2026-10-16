@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -13,7 +13,7 @@ from p4_codex_bridge import CodexBridge
 
 
 def main() -> int:
-    cwd = ROOT / "tests_real" / "context_workspace"
+    cwd = ROOT / "tests" / "manual" / "context_workspace"
     bridge = CodexBridge(allowed_roots=(cwd,))
     try:
         servers = bridge.list_configured_mcps(cwd=cwd, timeout_seconds=30)

@@ -23,7 +23,7 @@ try:
 except ModuleNotFoundError:
     # Allow direct source-checkout invocation while preferring an installed
     # package when the script runs from a clean release venv.
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from p4_codex_bridge import CodexBridge, ProjectTrust, RunSecurityPolicy
     from p4_codex_bridge.service import ForegroundService, ServiceConfig
 from p4_codex_bridge.service import request_service_action, service_metrics, service_status
