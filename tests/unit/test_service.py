@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from tests_py._portable_temp import TemporaryDirectory
+from tests.unit._portable_temp import TemporaryDirectory
 import time
 import unittest
 from pathlib import Path
@@ -223,7 +223,7 @@ class ResidentServiceTests(unittest.TestCase):
             command = [sys.executable, "-m", "p4_codex_bridge", "service", "run", "--fake",
                        "--config", str(config), "--state-dir", str(state)]
             env = dict(os.environ)
-            package_root = str(Path(__file__).resolve().parents[1])
+            package_root = str(Path(__file__).resolve().parents[2])
             env["PYTHONPATH"] = package_root + os.pathsep + env.get("PYTHONPATH", "")
             first = subprocess.Popen(command, cwd=package_root, env=env, stdin=subprocess.DEVNULL,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)

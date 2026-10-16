@@ -3,19 +3,19 @@ from __future__ import annotations
 import subprocess
 import sys
 import importlib.util
-from tests_py._portable_temp import TemporaryDirectory
+from tests.unit._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-SMOKE = ROOT / "tests_real" / "smoke_live_watch.py"
-SERVICE_SMOKE = ROOT / "tests_real" / "smoke_service.py"
+ROOT = Path(__file__).resolve().parents[2]
+SMOKE = ROOT / "tests" / "manual" / "smoke_live_watch.py"
+SERVICE_SMOKE = ROOT / "tests" / "manual" / "smoke_service.py"
 
 
 class RealSmokeScriptTests(unittest.TestCase):
     def test_all_manual_smoke_scripts_document_help_without_inference(self) -> None:
-        paths = sorted((ROOT / "tests_real").glob("smoke_*.py"))
+        paths = sorted((ROOT / "tests" / "manual").glob("smoke_*.py"))
         self.assertGreaterEqual(len(paths), 10)
         for script in paths:
             with self.subTest(script=script.name):
@@ -36,7 +36,7 @@ class RealSmokeScriptTests(unittest.TestCase):
         )
         for name in live_scripts:
             with self.subTest(script=name):
-                command = [sys.executable, str(ROOT / "tests_real" / name)]
+                command = [sys.executable, str(ROOT / "tests" / "manual" / name)]
                 help_result = subprocess.run(command + ["--help"], cwd=ROOT, capture_output=True,
                                              text=True, timeout=15, check=False)
                 self.assertEqual(help_result.returncode, 0, help_result.stderr)

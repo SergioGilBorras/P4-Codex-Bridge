@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from tests_py._portable_temp import TemporaryDirectory
+from tests.unit._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -63,7 +63,7 @@ class ServiceClientTests(unittest.TestCase):
     def test_version_and_help_import_cli_without_runtime_client(self):
         import subprocess
         import sys
-        project = Path(__file__).resolve().parents[1]
+        project = Path(__file__).resolve().parents[2]
         code = "import sys; import p4_codex_bridge.cli; assert 'p4_codex_bridge.client' not in sys.modules; from p4_codex_bridge.cli import main;\ntry: main(['--version'])\nexcept SystemExit as e: assert e.code == 0\nassert 'p4_codex_bridge.client' not in sys.modules"
         result = subprocess.run([sys.executable, "-c", code], cwd=project, capture_output=True, text=True, timeout=5, shell=False)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -229,7 +229,7 @@ class CrossProcessFakeDaemonTests(unittest.TestCase):
             state = root / "state"
             config = root / "service.toml"
             config.write_text(f'[service]\ncwd = "{workspace.as_posix()}"\n', encoding="utf-8")
-            project = Path(__file__).resolve().parents[1]
+            project = Path(__file__).resolve().parents[2]
             env = dict(os.environ)
             env["PYTHONPATH"] = str(project) + os.pathsep + env.get("PYTHONPATH", "")
             service = subprocess.Popen([sys.executable, "-m", "p4_codex_bridge", "service", "run", "--fake",

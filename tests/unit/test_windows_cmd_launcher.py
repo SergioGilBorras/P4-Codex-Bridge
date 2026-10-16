@@ -5,7 +5,7 @@ import os
 import importlib.util
 import subprocess
 import sys
-from tests_py._portable_temp import TemporaryDirectory
+from tests.unit._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
 
@@ -35,7 +35,7 @@ class WindowsCmdLauncherTests(unittest.TestCase):
 
     def test_wrapper_contract_and_module_entrypoint(self):
         from p4_codex_bridge import __version__
-        project = Path(__file__).resolve().parents[1]
+        project = Path(__file__).resolve().parents[2]
         wrapper = (project / "bin" / "p4-codex.cmd").read_text(encoding="utf-8")
         self.assertIn('set "_P4_CODEX_PYTHON=%~dp0python.exe"', wrapper)
         self.assertIn('"%_P4_CODEX_PYTHON%" -m p4_codex_bridge %*', wrapper)
@@ -50,7 +50,7 @@ class WindowsCmdLauncherTests(unittest.TestCase):
 
     def test_wheel_installs_cmd_beside_environment_python(self):
         from p4_codex_bridge import __version__
-        project = Path(__file__).resolve().parents[1]
+        project = Path(__file__).resolve().parents[2]
         with TemporaryDirectory(prefix="P4 wheel cmd ") as temporary:
             root = Path(temporary)
             wheelhouse = root / "wheelhouse"
@@ -76,7 +76,7 @@ class WindowsCmdLauncherTests(unittest.TestCase):
                          "set P4_RUN_WINDOWS_CMD_LAUNCHER_TESTS=1 outside restricted shells for installed CMD integration")
     def test_installed_cmd_quotes_paths_forwards_stdio_and_exit_code(self):
         from p4_codex_bridge import __version__
-        project = Path(__file__).resolve().parents[1]
+        project = Path(__file__).resolve().parents[2]
         with TemporaryDirectory(prefix="P4 bridge cmd ") as temporary:
             root = Path(temporary)
             wheelhouse = root / "wheelhouse"
