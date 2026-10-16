@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
-from tests_py._portable_temp import TemporaryDirectory
+from tests.unit._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch

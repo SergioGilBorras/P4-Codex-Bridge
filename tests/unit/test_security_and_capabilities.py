@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
-from tests_py._portable_temp import TemporaryDirectory
+from tests.unit._portable_temp import TemporaryDirectory
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -75,7 +75,7 @@ class RunSecurityTests(unittest.TestCase):
 
 class AppServerPreflightTests(unittest.TestCase):
     def test_committed_schema_fixtures_cover_method_presence_rename_and_corruption(self):
-        fixture_root = Path(__file__).parent / "fixtures" / "app_server_schema"
+        fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "app_server_schema"
         current = parse_schema_capabilities([fixture_root / "method_properties.json"], codex_version="0.160.1")
         changed = parse_schema_capabilities([fixture_root / "renamed_methods.json"])
         corrupt = parse_schema_capabilities([fixture_root / "malformed.json"])
@@ -86,7 +86,7 @@ class AppServerPreflightTests(unittest.TestCase):
         self.assertTrue(all(status == CapabilityStatus.UNKNOWN for status in corrupt.statuses.values()))
 
     def test_committed_schema_fixtures_cover_method_presence_rename_and_corruption(self):
-        fixture_root = Path(__file__).parent / "fixtures" / "app_server_schema"
+        fixture_root = Path(__file__).resolve().parents[1] / "fixtures" / "app_server_schema"
         current = parse_schema_capabilities([fixture_root / "method_properties.json"], codex_version="0.160.1")
         changed = parse_schema_capabilities([fixture_root / "renamed_methods.json"])
         corrupt = parse_schema_capabilities([fixture_root / "malformed.json"])

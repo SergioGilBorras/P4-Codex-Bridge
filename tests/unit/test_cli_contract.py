@@ -2,7 +2,7 @@ import contextlib
 import io
 import json
 import os
-from tests_py._portable_temp import TemporaryDirectory
+from tests.unit._portable_temp import TemporaryDirectory
 import unittest
 
 from p4_codex_bridge.cli import _error_exit_code, build_parser, main

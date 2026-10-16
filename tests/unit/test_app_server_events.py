@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from tests_py._portable_temp import TemporaryDirectory
+from tests.unit._portable_temp import TemporaryDirectory
 import threading
 import time
 import unittest

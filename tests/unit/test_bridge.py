@@ -4,7 +4,7 @@ import json
 import os
 import sqlite3
 import tempfile
-from tests_py._portable_temp import TemporaryDirectory
+from tests.unit._portable_temp import TemporaryDirectory
 import time
 from contextlib import closing
 import unittest

@@ -7,12 +7,12 @@ import sys
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class DocumentationAndHelpTests(unittest.TestCase):
     def test_local_markdown_links_exist(self):
-        paths = [ROOT / "README.md", ROOT / "AGENTS.md", *sorted((ROOT / "docs").rglob("*.md"))]
+        paths = [ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "CONTRIBUTORS.md", *sorted((ROOT / "docs").rglob("*.md")), *sorted((ROOT / "tests").rglob("README.md")), ROOT / "bin" / "README.md", ROOT / "examples" / "README.md", ROOT / "p4_codex_bridge" / "README.md"]
         broken = []
         for page in paths:
             for target in re.findall(r"(?<!!)\[[^\]]+\]\(([^)]+)\)", page.read_text(encoding="utf-8")):
