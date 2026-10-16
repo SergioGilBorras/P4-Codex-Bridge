@@ -86,12 +86,9 @@ def _read_limited(stream: Any, output: bytearray, lock: threading.Lock, exceeded
             if pending and event_sink:
                 event_sink(bytes(pending))
             return
-        if event_sink:
-            pending.extend(chunk)
-            while b"\n" in pending:
-                line, _, remainder = pending.partition(b"\n")
-                pending = bytearray(remainder)
-                if line: event_sink(bytes(line))
+        # Capture bounded process output before potentially blocking on SQLite event
+        # persistence. Parsing the completed result must not depend on event writes
+        # finishing within the reader join timeout.
         with lock:
             if len(output) + len(chunk) > MAX_OUTPUT_BYTES:
                 exceeded.set()
@@ -99,6 +96,12 @@ def _read_limited(stream: Any, output: bytearray, lock: threading.Lock, exceeded
                 output.extend(chunk[:remaining])
             elif not exceeded.is_set():
                 output.extend(chunk)
+        if event_sink:
+            pending.extend(chunk)
+            while b"\n" in pending:
+                line, _, remainder = pending.partition(b"\n")
+                pending = bytearray(remainder)
+                if line: event_sink(bytes(line))
 
 
 def execute(registry: RunRegistry, run_id: str, request: dict[str, Any]) -> None:
