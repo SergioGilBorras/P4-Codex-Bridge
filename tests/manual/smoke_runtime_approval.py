@@ -9,8 +9,8 @@ from pathlib import Path
 from portable_tempdirs import temporary_directory
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
 
 from p4_codex_bridge import CodexBridge
 from p4_codex_bridge.runtime_manager import CodexRuntimeManager, TurnState

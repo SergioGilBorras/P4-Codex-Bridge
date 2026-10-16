@@ -231,7 +231,7 @@ class CrossProcessFakeDaemonTests(unittest.TestCase):
             config.write_text(f'[service]\ncwd = "{workspace.as_posix()}"\n', encoding="utf-8")
             project = Path(__file__).resolve().parents[2]
             env = dict(os.environ)
-            env["PYTHONPATH"] = str(project) + os.pathsep + env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = str(project / "src") + os.pathsep + env.get("PYTHONPATH", "")
             service = subprocess.Popen([sys.executable, "-m", "p4_codex_bridge", "service", "run", "--fake",
                 "--config", str(config), "--state-dir", str(state)], cwd=project, env=env,
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False)

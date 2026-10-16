@@ -8,8 +8,8 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
 
 from p4_codex_bridge import CodexBridge, CodexPermissions, SandboxMode, ApprovalPolicy
 from p4_codex_bridge.runtime import probe
