@@ -3,7 +3,7 @@
 ## Requirements
 
 - Python **3.11+**. Python 3.10 is unsupported. The bridge uses stdlib `tomllib` and requires `portable-tempdirs`.
-- `portable-tempdirs` 0.1.2 is pinned to Git commit `fd6dbd640630e6911a53b4d756089099ec870a8b`; install therefore requires Git and access to that repository unless the dependency has been prebuilt and provided through an approved offline package source.
+- `portable-tempdirs` 0.1.2 is pinned to Git commit `aad3878ccd8347a1a23faf609b2db21265d30a1d`; install therefore requires Git and access to that repository unless the dependency has been prebuilt and provided through an approved offline package source.
 - Installed official Codex CLI, available to the same operating-system user and process environment that runs the bridge.
 - Codex authentication through `codex login` or another CLI-supported mechanism. The bridge does not require `OPENAI_API_KEY` or access Codex login tokens.
 - A directory for `cwd` that already exists and passes optional `allowed_roots` checks. Git is not required if the caller explicitly uses the supported `skip_git_repo_check` option.
@@ -54,7 +54,7 @@ These commands inspect configuration/capabilities; they do not run inference by 
 
 ## Development tests
 
-    python -m compileall -q p4_codex_bridge tests_py
-    python -m unittest discover -s tests_py -v
+    python -m compileall -q src/p4_codex_bridge tests/unit
+    python -m unittest discover -s tests/unit -v
 
-The ordinary suite runs fake CLI and app-server processes; real scripts under `tests_real/` require separate consent.
+The ordinary suite runs fake CLI and app-server processes; real scripts under `tests/manual/` require separate consent.

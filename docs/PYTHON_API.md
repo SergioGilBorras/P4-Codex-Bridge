@@ -20,7 +20,7 @@ operations remain experimental where they depend on evolving app-server RPCs.
 
 The package root has an explicit export allowlist. Runtime manager, service
 implementation, scheduler, registry, SQLite, transport, canonicalization and
-process helpers are not package-root exports. `tests_py/test_public_api.py`
+process helpers are not package-root exports. `tests/unit/test_public_api.py`
 locks this boundary. Some exported value types and methods remain experimental;
 being importable does not make them stable.
 
@@ -29,7 +29,7 @@ uses the explicitly named experimental `AppServerCapabilityStatus`; the two
 are separate types. `AppServerCapabilitySet`, `ApprovalRequest`, event models,
 `CodexTurn`, and `AppServerApprovalPolicy` are exported for advanced protocol
 users but remain EXPERIMENTAL. The current public call contract is summarized in [execution contract](CONTRACT.md) and
-covered by `tests_py/test_public_api.py`.
+covered by `tests/unit/test_public_api.py`.
 
 `CodexVersionInfo`, `CapabilitySet`, `CompatibilityResult`,
 `CompatibilityStatus`, and `assess_compatibility` are stable diagnostic value
@@ -273,7 +273,7 @@ independently polls persisted events. See [live observability](LIVE_OBSERVABILIT
 
 ## Install / import
 
-The runtime dependency `portable-tempdirs` 0.1.2 is pinned to Git commit `fd6dbd640630e6911a53b4d756089099ec870a8b`; it provides managed, identity-checked temporary directories. Installation requires Git/network access or a prebuilt artifact in an approved offline source. This direct-URL dependency also means these distribution metadata must not be uploaded to PyPI until the dependency is replaced by a published, verified release and the resulting package metadata is checked. Current source version `1.4.1` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`; no package release is claimed. Install this repository into the caller's Python environment with `pip install -e .`, or install a built wheel. Codex CLI remains an external installed prerequisite. Python >=3.11 is declared; Python <3.11 is not supported.
+The runtime dependency `portable-tempdirs` 0.1.2 is pinned to Git commit `aad3878ccd8347a1a23faf609b2db21265d30a1d`; it provides managed, identity-checked temporary directories. Installation requires Git/network access or a prebuilt artifact in an approved offline source. This direct-URL dependency also means these distribution metadata must not be uploaded to PyPI until the dependency is replaced by a published, verified release and the resulting package metadata is checked. Current source version `1.4.1` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`; no package release is claimed. Install this repository into the caller's Python environment with `pip install -e .`, or install a built wheel. Codex CLI remains an external installed prerequisite. Python >=3.11 is declared; Python <3.11 is not supported.
 
 ```python
 from p4_codex_bridge import (

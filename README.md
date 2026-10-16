@@ -121,11 +121,23 @@ Consult [CLI](docs/CLI.md) before submitting jobs. The foreground service and cr
 
 ## Verification
 
-    python -m compileall -q p4_codex_bridge tests_py
-    python -m unittest discover -s tests_py -v
+    python -m compileall -q src/p4_codex_bridge tests/unit
+    python -m unittest discover -s tests/unit -v
 
-Automated tests use fake Codex/app-server processes and do not make real model calls. Scripts in `tests_real/` are manual, opt-in and may incur usage.
+Automated tests use fake Codex/app-server processes and do not make real model calls. Scripts in `tests/manual/` are manual, opt-in and may incur usage.
 
 ## Documentation
 
 Start with the [documentation index](docs/README.md) for current API, architecture, security, operational guidance, known limitations and the [roadmap](docs/ROADMAP.md).
+
+## Project layout
+
+- [Source layout](src/README.md) — Python code under `src/`.
+- [Python package](src/p4_codex_bridge/README.md) — public API and implementation modules.
+- [Windows launcher](bin/README.md) — the installed `p4-codex.cmd` entry point.
+- [Example programs](examples/README.md) — non-production demonstration scripts.
+- [Tests](tests/README.md) — offline unit tests, fixtures, and separately authorized live checks.
+- [Example configuration](p4-codex.example.toml) — a template for the local foreground service; it is not loaded automatically.
+- [Documentation](docs/README.md) — current behavior, operating procedures and roadmap.
+
+P4-Codex-Bridge is distributed under the [MIT License](LICENSE). See [authors](AUTHORS.md) and [contributors](CONTRIBUTORS.md).

@@ -1,21 +1,31 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "p4-codex-bridge"
 dynamic = ["version"]
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 description = "P4-Codex-Bridge is a Python library and resident service that connects applications to the Codex CLI and app-server. It provides managed execution, resource scheduling, workspace locks, session and turn management, observability, and a client API for cross-process communication. "
 authors = [{ name = "Sergio Gil-Borrás" }]
 requires-python = ">=3.11"
 dependencies = [
-  "portable-tempdirs @ git+https://github.com/SergioGilBorras/portable-tempdirs.git@fd6dbd640630e6911a53b4d756089099ec870a8b",
+  "portable-tempdirs @ git+https://github.com/SergioGilBorras/portable-tempdirs.git@aad3878ccd8347a1a23faf609b2db21265d30a1d",
 ]
+
+[project.urls]
+Repository = "https://github.com/SergioGilBorras/P4-Codex-Bridge"
 
 [project.scripts]
 p4-codex = "p4_codex_bridge.cli:main"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["p4_codex_bridge*"]
 
 [tool.setuptools.data-files]

@@ -4,13 +4,13 @@
 
 The automatic `unittest` suite is deliberately **zero-inference**. It uses fake CLI/app-server processes and local SQLite fixtures; it must not call Codex models or external side-effecting MCPs.
 
-    python -m unittest discover -s tests_py -v
+    python -m unittest discover -s tests/unit -v
 
 Syntax compilation, packaging checks, local CLI help and documented fake-service tests do not themselves require model generation.
 
 ## Opt-in manual checks
 
-Scripts under `tests_real/` may contact the authenticated Codex service. Run them only with explicit, separate authorization, a known workspace/security policy and a recorded call budget.
+Scripts under `tests/manual/` may contact the authenticated Codex service. Run them only with explicit, separate authorization, a known workspace/security policy and a recorded call budget.
 
 Before manual execution:
 

@@ -35,8 +35,9 @@ outputs/
 .serena/cache/
 .serena/logs/
 .serena/project.local.yml
-tests_real/.live-watch-state/
-tests_real/smoke_workspace/
+tests/manual/.live-watch-state/
+tests/manual/smoke_workspace/*
+!tests/manual/smoke_workspace/README.md
 
 # IDEs
 .idea/
