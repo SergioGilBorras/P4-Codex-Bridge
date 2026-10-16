@@ -1,4 +1,4 @@
-# Current Python execution contract (1.4.0 development)
+# Current Python execution contract
 
 The supported consumer boundary is the Python package-root `p4_codex_bridge` API and the documented `p4-codex` operator CLI. Internal scheduler, worker, SQLite schema and app-server transports are not stable public imports.
 
@@ -29,7 +29,7 @@ This call may still be refused by `RunSecurityPolicy` if external MCP risk canno
 - `timeout_seconds`: validated positive bounded duration; the bridge supervises the child.
 - `permissions`: typed sandbox/approval and optional validated additional roots/network settings.
 - `config_policy`: `isolated`, `project`, or `explicit`; `isolated` permits only the scalar `web_search` override, `explicit` permits allowlisted overrides, and `project` rejects overrides.
-- `config_overrides.web_search`: new in 1.4.0; per-run `disabled`, `cached`, `indexed` or `live`. Opt-in access to native Codex web search, independent of shell networking. It must not be treated as proof of a search or trusted citation; the bridge cannot attest source visits.
+- `config_overrides.web_search`: per-run `disabled`, `cached`, `indexed` or `live`. Opt-in access to native Codex web search, independent of shell networking. It must not be treated as proof of a search or trusted citation; bounded observed source URLs are not proof of successful page loading or page contents.
 - `output_schema` and `capture_last_message`: use CLI-supported bridge-owned temporary files.
 - `ephemeral: bool = True`: adds `--ephemeral` for new exec runs after confirming the installed CLI advertises the flag. With `False`, the flag is omitted; successful results still require a valid native session ID. Fake tests verify propagation, not live Codex retention or resumability.
 - `skip_git_repo_check: bool = False`: opt-in on `run()` and managed `start()` only. The CLI must advertise the option or the bridge fails before execution/submission.

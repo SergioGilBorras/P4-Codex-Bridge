@@ -1,12 +1,12 @@
 # P4-Codex-Bridge documentation
 
-This index describes the **current 1.4.0 development source tree (not published)**. Product functionality, verified local CLI capability, and intended roadmap work are distinct. The Codex CLI installation, authentication, protocol availability, and effective MCP/skills permissions can vary by environment.
+This index describes the **current 1.4.1 source tree** (no package release claimed). Product functionality, verified local CLI capability, and intended roadmap work are distinct. The Codex CLI installation, authentication, protocol availability, and effective MCP/skills permissions can vary by environment.
 
 ## Start here
 
 - [Installation](INSTALLATION.md) — install, CLI preflight and Windows invocation.
 - [Python API](PYTHON_API.md) — public `CodexBridge` methods, signatures and usage.
-- [Web search by execution](PYTHON_API.md#per-run-codex-web-search-bridge-130) and [event provenance](WEB_PROVENANCE.md) — available in 1.4.0: modes, isolated configuration, source-verification and safety requirements.
+- [Web search by execution](PYTHON_API.md#per-run-codex-web-search) and [event provenance](WEB_PROVENANCE.md) — current modes, bounded native event observations, source-verification limits and safety requirements.
 - [Execution contract](CONTRACT.md) — run arguments, results and error handling.
 - [CLI](CLI.md) — operator commands and JSON/JSONL behavior.
 - [Architecture](ARCHITECTURE.md) — components and state ownership.

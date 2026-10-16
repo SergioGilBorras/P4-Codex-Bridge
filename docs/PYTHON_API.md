@@ -3,7 +3,7 @@
 ## Public surface and stability
 
 Consumers should import contracts only from `p4_codex_bridge`. Its explicit
-package-root allowlist remains the stable public boundary in 1.2. `CodexBridge` is the
+package-root allowlist is the stable public consumer boundary. `CodexBridge` is the
 in-process facade; `CodexServiceClient` is the stable boundary for a separate
 process submitting work to the resident service. Protocol-specific lifecycle
 operations remain experimental where they depend on evolving app-server RPCs.
@@ -273,7 +273,7 @@ independently polls persisted events. See [live observability](LIVE_OBSERVABILIT
 
 ## Install / import
 
-The runtime dependency `portable-tempdirs` 0.1.2 is pinned to Git commit `fd6dbd640630e6911a53b4d756089099ec870a8b`; it provides managed, identity-checked temporary directories. Installation requires Git/network access or a prebuilt artifact in an approved offline source. This direct-URL dependency also means these distribution metadata must not be uploaded to PyPI until the dependency is replaced by a published, verified release and the resulting package metadata is checked. Current development source version `1.4.0` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`; this change is not a published release. Install this repository into the caller's Python environment with `pip install -e .`, or install a built wheel. Codex CLI remains an external installed prerequisite. Python >=3.11 is declared; Python <3.11 is not supported.
+The runtime dependency `portable-tempdirs` 0.1.2 is pinned to Git commit `fd6dbd640630e6911a53b4d756089099ec870a8b`; it provides managed, identity-checked temporary directories. Installation requires Git/network access or a prebuilt artifact in an approved offline source. This direct-URL dependency also means these distribution metadata must not be uploaded to PyPI until the dependency is replaced by a published, verified release and the resulting package metadata is checked. Current source version `1.4.1` is defined once in `p4_codex_bridge.__version__` and read dynamically by setuptools and `p4-codex --version`; no package release is claimed. Install this repository into the caller's Python environment with `pip install -e .`, or install a built wheel. Codex CLI remains an external installed prerequisite. Python >=3.11 is declared; Python <3.11 is not supported.
 
 ```python
 from p4_codex_bridge import (
@@ -385,7 +385,7 @@ Typed tuning is `model`, `reasoning_effort`, `reasoning_summary` (`auto`, `conci
 
 `get_effective_config()` uses app-server `config/read`, not the same child process as `exec`; it returns only selected non-secret primitive fields and layer source types. Its result is diagnostic and must not be reported as an exact effective config for another run. For MCPs, `list_configured_mcps()` reports configured/enabled/advertised-tool state separately from callability, child visibility and per-run effectiveness. `list_effective_skills()` has the same diagnostic-child boundary. `get_effective_capabilities(include_diagnostics=True)` groups those three diagnostic responses, but never upgrades them to `EFFECTIVE_FOR_RUN`. `config_policy="isolated"` is not supported by the diagnostic app-server because it has no equivalent to exec's `--ignore-user-config`; the API returns `NOT_SUPPORTED` for those diagnostic fields instead of guessing. AGENTS loading is not acknowledged by `codex exec`; the marker script requires an explicit `--allow-unfiltered-mcps` acknowledgement before it can start a model run.
 
-### Per-run Codex web search (Bridge 1.4.0)
+### Per-run Codex web search
 
 For an explicitly authorized research run, pass a `web_search` override. It controls the *native Codex search tool*, not OS/sandbox networking. It is available with `config_policy="isolated"` (where it must be the **only** override) and `config_policy="explicit"`. `project` rejects overrides. The selected mode is passed as `-c web_search="<mode>"` to `codex exec`.
 

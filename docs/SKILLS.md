@@ -1,18 +1,17 @@
 # Skills discovery and child behavior
 
-## Current discovery and evidence limits
+## Current guarantees and limits
 
-OpenAI's [Codex customization documentation](https://learn.chatgpt.com/docs/customization/overview#skills) documents global skills under `~/.agents/skills` and repository skills under `.agents/skills`. Codex uses progressive disclosure: skill metadata is available for discovery, the `SKILL.md` body is loaded when the skill is selected, and references/scripts are loaded only when needed.
+Codex may discover global or project skills according to its installed configuration. Skill metadata, instructions and supporting files are loaded according to Codex's own skill-discovery rules; see [Codex customization documentation](https://developers.openai.com/codex/skills).
 
-The development host supplied 18 skills in this session. This is `SESSION_VISIBLE`; those skills are not automatically inherited by a CLI subprocess. In this checkout no `.agents/skills` directory was found. A diagnostic app-server `skills/list` call for the smoke fixture returned five enabled entries with `scope=system`: `imagegen`, `openai-docs`, `review-agent`, `skill-creator`, `skill-installer`. That confirms visibility only to that diagnostic child. It does not prove a `codex exec` run can select or load those skills.
+P4-Codex-Bridge can request a diagnostic app-server `skills/list` response through `list_effective_skills()`. That response describes resources visible to **the diagnostic child**, not a guaranteed skill inventory or proof of invocation by a separate `codex exec` run. Host-session skills, project files and configured MCP resources must not be inferred to be available to the execution child.
 
-| Capability | State | Evidence |
+| Capability | Current status | Evidence needed |
 |---|---|---|
-| Host skills | `SESSION_VISIBLE` | 18 skill instructions supplied to this agent. |
-| CLI skill configuration | `NOT_CONFIRMED` | CLI help and `codex mcp list` do not enumerate skills. |
-| Project skill files | `NOT_AVAILABLE` in this checkout | No `.agents/skills` directory. |
-| Diagnostic app-server skill list | `CHILD_VISIBLE` | Five `system` entries returned by `skills/list`, all marked enabled. |
-| Skill invocation by a bridge `exec` run | `NOT_CONFIRMED` | No skill invocation receipt or matching real run. |
-| MCP-provided skill resources | `NOT_CONFIRMED` | No MCP resource count/list was obtained; don't equate MCP tools with skills. |
+| Host skill inventory | Environment-dependent | Inspect the active development host; never use a stored count as an installation guarantee. |
+| Project skill files | Workspace-dependent | Inspect the chosen workspace and Codex configuration at runtime. |
+| Diagnostic app-server skill list | Diagnostic only | Check the current `skills/list` response and its advertised scopes. |
+| Skill invocation in a bridge exec run | Not guaranteed | Evidence tied to the exact execution, not a separate app-server or host session. |
+| MCP-provided skill resources | Not guaranteed | Inspect resources separately; MCP tools and Codex skills are not interchangeable. |
 
-No real skill smoke was run. There is no trivial local skill whose invocation can be proved without a model turn and without filesystem/network effects. Use `list_effective_skills()` as a diagnostic listing only; do not describe its output as effective for a different run.
+The bridge has no verified per-run skill allowlist or suppression receipt. Project trust, configuration selection and external MCP risk require independent security assessment. Real skill invocations are opt-in operations that may consume model usage. See [capability matrix](CAPABILITY_MATRIX.md), [MCP](MCP.md) and [security](SECURITY.md).

@@ -2,7 +2,7 @@
 
 ## Project boundary
 
-This repository is shared infrastructure for invoking Codex from P4. Planned consumers are P4-Planning-Agent, P4-Jira-Agent-Orchestrator and GestorProyectosIA. Do not modify consumers or duplicate the Codex client there unless an integration task explicitly requests it. Do not add Jira, scheduling, planning, requirements, pipeline or Orchestrator lifecycle logic here.
+This repository is shared infrastructure for invoking Codex from P4. Potential and active consumers include P4-Planning-Agent, P4-Jira-Agent-Orchestrator and GestorProyectosIA; confirm individual installations independently. Do not modify consumers or duplicate the Codex client there unless an integration task explicitly requests it. Do not add Jira, scheduling, planning, requirements, pipeline or Orchestrator lifecycle logic here.
 
 ## Tooling and discovery
 
@@ -17,8 +17,8 @@ This repository is shared infrastructure for invoking Codex from P4. Planned con
 - Python is the sole canonical runtime and public API. Do not reintroduce a duplicate JavaScript Codex client or runtime.
 - `codex exec` supports direct one-shot `run()` and managed/scheduled `start()`. The app-server runtime manager is resident and experimental; thread/turn state is distinct from exec runs. Schema preflight must fail closed for unknown required capabilities.
 - No consumer integration until separately requested. Do not remove `P4-Planning-Agent/scripts/js` sources as part of bridge work.
-- Profiles are configuration, not P4 business logic. Only `analysis` is implemented for one-shot `exec`; app-server turns accept explicit permissions. Planned profiles must fail closed rather than silently run with guessed policy.
-- App-server approval handling is manual by default. Never auto-approve by default. `danger-full-access` plus automatic approval must never become a profile default; `AUTO_APPROVE_SAFE_ONLY` stays planned until action classification is deterministic.
+- Profiles are configuration, not P4 business logic. Only `analysis` is implemented for one-shot `exec`; app-server turns accept explicit permissions. Other named profiles are unsupported and must fail closed rather than silently run with guessed policy.
+- App-server approval handling is manual by default. Never auto-approve by default. `danger-full-access` plus automatic approval must never become a profile default; `AUTO_APPROVE_SAFE_ONLY` is unsupported without a deterministic safe-action classifier; proposals belong in the roadmap.
 - Preserve the distinction between `exec stop/kill` and app-server `turn/interrupt`; do not terminate Codex processes not owned by the bridge.
 
 ## Security and subprocesses
@@ -35,7 +35,7 @@ This repository is shared infrastructure for invoking Codex from P4. Planned con
 
 - Python: `python -m compileall -q p4_codex_bridge tests_py`, then `python -m unittest discover -s tests_py -v`.
 - Real Codex smokes remain manual and separate: `python tests_real/smoke_streaming.py` is one minimal read-only turn; `python tests_real/smoke_approval_reject.py` is never run automatically.
-- Do not claim checks passed unless they ran. Do not use an unrelated global Python project environment; `.venv` is not currently part of this checkout.
+- Do not claim checks passed unless they ran. Do not use an unrelated global Python project environment; always select the intended project Python environment explicitly.
 
 ## Git
 
