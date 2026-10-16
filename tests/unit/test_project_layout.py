@@ -16,12 +16,14 @@ class ProjectLayoutTests(unittest.TestCase):
                 self.assertTrue((ROOT / name / "README.md").is_file())
         self.assertTrue((ROOT / "src" / "p4_codex_bridge" / "README.md").is_file())
         self.assertFalse((ROOT / "p4_codex_bridge").exists())
-        for name in ("LICENSE", "AUTHORS.md", "CONTRIBUTORS.md"):
+        for name in ("LICENSE", "AUTHORS.md", "CONTRIBUTING.md"):
             with self.subTest(file=name):
                 self.assertTrue((ROOT / name).is_file())
         self.assertIn("MIT License", (ROOT / "LICENSE").read_text(encoding="utf-8"))
+        self.assertFalse((ROOT / "CONTRIBUTORS.md").exists())
+        self.assertIn("python -m unittest discover -s tests/unit -v", (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8"))
         manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
-        for name in ("AUTHORS.md", "CONTRIBUTORS.md"):
+        for name in ("AUTHORS.md", "CONTRIBUTING.md"):
             with self.subTest(sdist_file=name):
                 self.assertIn("include " + name, manifest.splitlines())
 
