@@ -20,6 +20,10 @@ class ProjectLayoutTests(unittest.TestCase):
             with self.subTest(file=name):
                 self.assertTrue((ROOT / name).is_file())
         self.assertIn("MIT License", (ROOT / "LICENSE").read_text(encoding="utf-8"))
+        manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
+        for name in ("AUTHORS.md", "CONTRIBUTORS.md"):
+            with self.subTest(sdist_file=name):
+                self.assertIn("include " + name, manifest.splitlines())
 
     def test_package_metadata_and_pinned_dependency(self) -> None:
         data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
