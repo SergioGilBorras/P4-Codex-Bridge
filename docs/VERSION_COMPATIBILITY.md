@@ -4,7 +4,7 @@
 
 - **P4-Codex-Bridge 1.4.1** source; no package release is claimed.
 - Python **3.11+**. Python 3.10 or older is unsupported.
-- `portable-tempdirs 0.1.2`, installed from its pinned Git commit `fd6dbd640630e6911a53b4d756089099ec870a8b`; installation requires access to the source or an approved offline artifact.
+- `portable-tempdirs 0.1.2`, installed from its pinned Git commit `aad3878ccd8347a1a23faf609b2db21265d30a1d`; installation requires access to the source or an approved offline artifact.
 - Official Codex CLI installed and authenticated for the current operating-system user. Model availability, `codex exec` flags and app-server RPCs depend on the **installed** CLI and the account; they are not guaranteed by the Bridge version.
 - Native Codex interface, not a direct OpenAI Responses API integration.
 
