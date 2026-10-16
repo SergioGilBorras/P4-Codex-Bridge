@@ -26,10 +26,10 @@ paths and effective limits but no environment or authentication material.
 Environment variables in TOML paths use Windows `%NAME%` / platform-native
 expansion.
 
-The current configuration has no `config_version` key. TOML is a single strict
-schema: unknown sections/keys fail closed. A future incompatible schema change
-must provide an explicit migration or a separately named config format; it
-must not silently reinterpret existing fields. Config may select an executable
+The current configuration has no `config_version` key. TOML uses a single strict
+schema: unknown sections/keys fail closed. Configuration formats are not
+silently reinterpreted, and incompatible schemas require an explicit migration
+or a separately named format. Config may select an executable
 but cannot store API keys, bearer tokens, passwords, cookies, or auth headers.
 
 Supported bridge environment variables are exactly:
