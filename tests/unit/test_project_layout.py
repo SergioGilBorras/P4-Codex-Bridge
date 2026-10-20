@@ -21,6 +21,7 @@ class ProjectLayoutTests(unittest.TestCase):
                 self.assertTrue((ROOT / name).is_file())
         self.assertIn("MIT License", (ROOT / "LICENSE").read_text(encoding="utf-8"))
         self.assertFalse((ROOT / "CONTRIBUTORS.md").exists())
+        self.assertIn(".serena/", (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines())
         self.assertIn("python -m unittest discover -s tests/unit -v", (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8"))
         manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
         for name in ("AUTHORS.md", "CONTRIBUTING.md"):

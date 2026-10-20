@@ -32,9 +32,8 @@ outputs/
 *.sqlite
 *.db
 .codex-schema-audit/
-.serena/cache/
-.serena/logs/
-.serena/project.local.yml
+# Local Serena project settings, caches, logs, and memories (never versioned)
+.serena/
 tests/manual/.live-watch-state/
 tests/manual/smoke_workspace/*
 !tests/manual/smoke_workspace/README.md
